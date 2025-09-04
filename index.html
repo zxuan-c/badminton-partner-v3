@@ -75,6 +75,7 @@
       gap:16px; padding: calc(env(safe-area-inset-top, 0px) + 40px) 20px 30px; /* extra top space on iPhone */
       text-align:center;
     }
+    
     .counter{font-size:14px; letter-spacing:.4px; color:var(--muted)}
     .teams{ display:grid; gap:14px; width:100%; }
     .team{
@@ -119,6 +120,11 @@
     .switch input::after{ content:""; width:18px; height:18px; position:absolute; top:1px; left:1px; border-radius:50%; background:#e6edf3; transition:left .2s ease; }
     .switch input:checked{background:#1f3e5c}
     .switch input:checked::after{ left:19px; }
+    @media (max-width: 768px) {
+  .stage {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 180px);
+  }
+}
   </style>
 </head>
 <body>
