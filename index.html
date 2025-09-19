@@ -28,7 +28,7 @@
       color:var(--text); font-family: ui-sans-serif, system-ui, -apple-system, "PingFang TC","Noto Sans TC","Microsoft JhengHei", Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
       display:flex; align-items:center; justify-content:center; padding:24px;
     }
-    .app{width:min(1100px,100%);}
+    .app{width:min(1100px,100%);} 
     .grid{display:grid; grid-template-columns: 1.2fr .8fr; gap:20px}
     @media (max-width: 920px){ .grid{grid-template-columns:1fr} }
 
@@ -70,9 +70,9 @@
     .pill{ padding:6px 10px; border:1px solid rgba(255,255,255,.08); border-radius:999px; background:#0a121a; color:#cfe5ff }
 
     .stage{
-      min-height: 60vh; /* vertically centered feel */
+      min-height: 60vh;
       display:flex; flex-direction:column; align-items:center; justify-content:center;
-      gap:16px; padding: calc(env(safe-area-inset-top, 0px) + 40px) 20px 30px; /* extra top space on iPhone */
+      gap:16px; padding: calc(env(safe-area-inset-top, 0px) + 40px) 20px 30px;
       text-align:center;
     }
     
@@ -120,14 +120,14 @@
     .switch input::after{ content:""; width:18px; height:18px; position:absolute; top:1px; left:1px; border-radius:50%; background:#e6edf3; transition:left .2s ease; }
     .switch input:checked{background:#1f3e5c}
     .switch input:checked::after{ left:19px; }
+
+    /* FIXED: media query braces */
     @media (max-width: 768px) {
-  .stage {
-    padding-top: calc(env(safe-area-inset-top, 0px) + 580px);
-  }
-      @media (min-width: 769px) and (max-width: 1024px) { .stage {
-    padding-top: calc(env(safe-area-inset-top, 0px) + 480px);
-      }
-}
+      .stage { padding-top: calc(env(safe-area-inset-top, 0px) + 580px); }
+    }
+    @media (min-width: 769px) and (max-width: 1024px) {
+      .stage { padding-top: calc(env(safe-area-inset-top, 0px) + 480px); }
+    }
   </style>
 </head>
 <body>
@@ -251,11 +251,18 @@
     let idx = 0;
     let scores = {}; // { [idx]: {l:0, r:0, swapped:false} }
 
+    function flash(el){
+      el.style.filter = 'brightness(1.4)';
+      setTimeout(()=>{ el.style.filter=''; }, 220);
+    }
+
     function save(){
       if(!persistToggle.checked) return;
       const data = { text: inputArea.value, idx, scores };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-      document.getElementById('persist-pill').textContent = '已自動儲存';
+      const pill = document.getElementById('persist-pill');
+      pill.textContent = '已自動儲存';
+      flash(pill);
     }
     function load(){
       try{
@@ -279,7 +286,7 @@
       const fwSpace = /[\u3000]/g;
       s = s.replace(fwSpace,' ');
       s = s.replace(/\s+/g,' ').trim();
-      s = s.replace(/\s*(?:vs\.?|VS\.?|Vs\.?|v\.|V\.|對|對上|對戰|vs：|vs:)\s*/g,' vs ');
+      s = s.replace(/\s*(?:vs\.?|VS\.?|Vs\.?|v\.|V\.|對|對上|對戰|vs：|vs:|：vs|：VS)\s*/gi,' vs ');
       const parts = s.split(/\s+vs\s+/i);
       if(parts.length > 2){
         s = parts[0] + ' vs ' + parts.slice(1).join(' & ');
@@ -293,7 +300,8 @@
       const norm = normalizeVs(line);
       const [left,right] = norm.split(/\s+vs\s+/i);
       if(!left || !right) return null;
-      const splitNames = t => t.split(/\s*\+\s*|、|，|,|＆|&/).map(x=>x.trim()).filter(Boolean);
+      // add full-width plus ＋
+      const splitNames = t => t.split(/\s*\+\s*|、|，|,|＆|&|＋/).map(x=>x.trim()).filter(Boolean);
       const L = splitNames(left);
       const R = splitNames(right);
       if(L.length < 1 || R.length < 1) return null;
@@ -392,7 +400,19 @@
     resetScoreBtn.addEventListener('click', ()=>{ ensureScore(); scores[idx].l = 0; scores[idx].r = 0; renderScores(); save(); });
     swapBtn.addEventListener('click', ()=>{ ensureScore(); scores[idx].swapped = !scores[idx].swapped; render(); save(); });
 
-    loadBtn.addEventListener('click', ()=>{ parse(); render(); });
+    // FIX 1: 載入時強制回到第一場，並在解析失敗時給提示
+    loadBtn.addEventListener('click', ()=>{ 
+      parse(); 
+      if(matches.length === 0){
+        alert('讀不到任何場次，請確認格式：\nA + B vs C + D');
+        return;
+      }
+      idx = 0; 
+      scores = {}; // 新的賽程重置比分避免殘留
+      render(); 
+      save();
+    });
+
     shuffleBtn.addEventListener('click', ()=>{ shuffle(); });
     resetBtn.addEventListener('click', ()=>{ reset(); });
     nextBtn.addEventListener('click', ()=>{ next(); });
@@ -409,6 +429,8 @@
       if(e.key==='['){ ensureScore(); scores[idx].l = clamp(scores[idx].l + 1); renderScores(); save(); }
       if(e.key==='}'){ ensureScore(); scores[idx].r = clamp(scores[idx].r - 1); renderScores(); save(); }
       if(e.key==='{'){ ensureScore(); scores[idx].l = clamp(scores[idx].l - 1); renderScores(); save(); }
+      // 方便快速載入：Ctrl/Cmd + Enter
+      if((e.ctrlKey || e.metaKey) && e.key==='Enter'){ loadBtn.click(); }
     });
 
     persistToggle.addEventListener('change', ()=> save());
