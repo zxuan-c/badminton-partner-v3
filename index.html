@@ -3,557 +3,606 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>羽球雙打自動排程與計分板</title>
+    <title>羽球雙打排程與計分</title>
     <style>
+        /* --- 基礎設定 --- */
         :root {
-            --primary-color: #2c3e50;
-            --accent-color: #27ae60;
-            --danger-color: #e74c3c;
-            --bg-color: #f4f7f6;
-            --card-bg: #ffffff;
+            --primary: #2c3e50;
+            --accent: #27ae60;
+            --danger: #c0392b;
+            --bg: #f0f2f5;
+            --card: #ffffff;
+            --text: #333;
         }
 
-        * { box-sizing: border-box; touch-action: manipulation; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg);
             margin: 0;
             padding: 0;
-            color: #333;
             height: 100vh;
+            height: 100dvh; /* 手機瀏覽器優化 */
             display: flex;
             flex-direction: column;
+            color: var(--text);
+            overflow: hidden; /* 防止整體頁面滾動，只讓內容區滾動 */
         }
 
-        /* 通用樣式 */
-        .container {
-            width: 100%;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 15px;
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-        }
-
-        h1, h2 { text-align: center; margin: 10px 0; font-size: 1.2rem; color: var(--primary-color); }
+        /* --- 通用元件 --- */
+        h1, h2, h3 { margin: 0; text-align: center; }
         
         button {
             cursor: pointer;
             border: none;
-            border-radius: 8px;
-            font-weight: bold;
-            transition: opacity 0.2s;
+            outline: none;
+            font-family: inherit;
+            transition: all 0.1s;
         }
-        button:active { opacity: 0.8; }
+        button:active { transform: scale(0.98); opacity: 0.9; }
 
-        .btn-primary { background: var(--primary-color); color: white; padding: 10px 20px; width: 100%; font-size: 1rem; }
-        .btn-danger { background: var(--danger-color); color: white; }
-        .btn-success { background: var(--accent-color); color: white; }
-        
-        input[type="text"], input[type="number"] {
-            width: 100%;
-            padding: 10px;
+        .btn-lg { width: 100%; padding: 15px; font-size: 1.1rem; border-radius: 12px; font-weight: bold; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-success { background: var(--accent); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-outline { background: transparent; border: 1px solid #ccc; color: #666; padding: 8px 15px; border-radius: 8px; }
+
+        input {
+            width: 100%; padding: 12px; font-size: 1rem;
+            border: 2px solid #ddd; border-radius: 8px;
             margin-bottom: 10px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 1rem;
         }
+        input:focus { border-color: var(--primary); outline: none; }
 
-        /* 設定頁面 */
-        #setup-page { display: block; }
-        .player-input-group { display: flex; gap: 10px; margin-bottom: 10px; }
-        .player-list { max-height: 300px; overflow-y: auto; margin-bottom: 20px; }
-        .player-tag { 
-            display: inline-block; 
-            background: #e0e0e0; 
-            padding: 5px 10px; 
-            border-radius: 15px; 
-            margin: 3px; 
-            font-size: 0.9rem;
-        }
-
-        /* 主應用頁面 (計分板 + 列表) */
-        #app-page { display: none; height: 100%; flex-direction: column; }
-
-        /* 計分板區域 - 核心功能 */
-        .scoreboard {
-            flex: 2; /* 佔據較大比例 */
-            background: var(--card-bg);
-            border-radius: 15px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            padding: 10px;
+        /* --- 頁面容器 --- */
+        .page {
+            flex: 1;
             display: flex;
             flex-direction: column;
-            justify-content: center;
-            margin-bottom: 15px;
-            position: relative;
-        }
-
-        .match-info {
-            text-align: center;
-            font-size: 1rem;
-            color: #7f8c8d;
-            margin-bottom: 5px;
-        }
-
-        .scores-container {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            padding: 15px;
+            max-width: 600px;
+            width: 100%;
+            margin: 0 auto;
             height: 100%;
         }
 
-        .team {
+        /* --- 設定頁面 (Setup Page) --- */
+        #setup-page {
+            display: flex; /* 預設顯示 */
+            justify-content: center;
+            overflow-y: auto;
+        }
+        
+        .card {
+            background: var(--card);
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            width: 100%;
+        }
+
+        .player-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 15px 0;
+            min-height: 50px;
+        }
+
+        .player-tag {
+            background: #e9ecef;
+            color: #333;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .player-tag span { color: #999; font-size: 1.2rem; line-height: 0.8; cursor: pointer; }
+
+        /* --- 主應用頁面 (App Page) --- */
+        #app-page {
+            display: none; /* 預設隱藏，由 JS 開啟 */
+            gap: 15px;
+            padding-bottom: 0;
+        }
+
+        /* 計分板區域 (Scoreboard) - 佔比最大 */
+        .scoreboard-section {
+            flex: 6; /* 佔據畫面 60% 高度 */
+            background: var(--card);
+            border-radius: 20px;
+            box-shadow: 0 4px 25px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .match-header {
+            background: #f8f9fa;
+            padding: 8px;
+            text-align: center;
+            color: #666;
+            font-size: 0.9rem;
+            border-bottom: 1px solid #eee;
+        }
+
+        .scores-area {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px;
+        }
+
+        .team-col {
             flex: 1;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
             height: 100%;
+            justify-content: center;
         }
 
         .team-names {
-            font-size: 1.1rem;
+            font-size: 1.2rem;
             font-weight: bold;
             text-align: center;
+            color: var(--text);
             margin-bottom: 10px;
-            min-height: 50px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
+            line-height: 1.4;
         }
 
-        .score-display {
-            font-size: 5rem;
+        .score-number {
+            font-size: 6rem; /* 超大字體 */
             font-weight: 800;
+            color: var(--primary);
             line-height: 1;
-            color: var(--primary-color);
             margin: 10px 0;
+            font-variant-numeric: tabular-nums;
         }
 
-        .score-controls {
+        .score-btns {
             display: flex;
             gap: 15px;
         }
 
-        .btn-score {
-            width: 50px;
-            height: 50px;
+        .btn-circle {
+            width: 55px;
+            height: 55px;
             border-radius: 50%;
-            font-size: 1.5rem;
+            font-size: 1.8rem;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            box-shadow: 0 3px 10px rgba(0,0,0,0.15);
         }
 
         .vs-divider {
             font-size: 1.5rem;
-            font-weight: bold;
-            color: #ccc;
-            padding: 0 10px;
+            font-weight: 900;
+            color: #e0e0e0;
+            transform: skew(-10deg);
         }
 
-        .match-actions {
-            margin-top: 10px;
-            display: flex;
-            gap: 10px;
-        }
-
-        .match-actions button {
-            flex: 1;
-            padding: 12px;
-            font-size: 1rem;
-        }
-
-        /* 賽程列表區域 */
-        .schedule-container {
-            flex: 1; /* 佔據剩餘空間 */
-            background: var(--card-bg);
-            border-radius: 15px 15px 0 0;
-            box-shadow: 0 -4px 15px rgba(0,0,0,0.05);
+        .action-area {
             padding: 15px;
-            overflow-y: auto;
+            background: white;
             border-top: 1px solid #eee;
         }
 
-        .schedule-item {
-            padding: 10px;
-            border-bottom: 1px solid #eee;
+        /* 賽程列表區域 (Schedule List) */
+        .schedule-section {
+            flex: 4; /* 佔據畫面 40% 高度 */
+            background: var(--card);
+            border-radius: 20px 20px 0 0;
+            padding: 15px;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 0.9rem;
-        }
-        .schedule-item.active {
-            background-color: #e8f8f5;
-            border-left: 4px solid var(--accent-color);
-        }
-        .schedule-item.finished {
-            opacity: 0.6;
-            background-color: #f9f9f9;
-        }
-        .schedule-score {
-            font-weight: bold;
-            color: var(--primary-color);
+            flex-direction: column;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.05);
         }
 
-        /* 重置按鈕小角落 */
-        .reset-btn-wrapper {
-            text-align: center;
-            margin-top: 20px;
+        .list-container {
+            flex: 1;
+            overflow-y: auto;
+            margin-top: 10px;
         }
-        .btn-text {
-            background: none;
-            color: #999;
-            font-size: 0.8rem;
-            text-decoration: underline;
+
+        .match-row {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 0.9rem;
         }
+        .match-row.active { background: #e8f6f3; border-left: 4px solid var(--accent); }
+        .match-row.finished { opacity: 0.5; background: #f9f9f9; }
+        
+        .match-id { width: 30px; color: #999; font-size: 0.8rem; }
+        .match-players { flex: 1; display: flex; justify-content: space-between; text-align: center; }
+        .match-vs { width: 40px; text-align: center; font-weight: bold; color: #ddd; }
+        .match-score { width: 40px; text-align: center; font-weight: bold; color: var(--primary); }
+
+        /* 隱藏工具列 */
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+        }
+        .text-link { background: none; color: #888; font-size: 0.85rem; text-decoration: underline; }
+
     </style>
 </head>
 <body>
 
-    <div id="setup-page" class="container">
-        <h1>🏸 羽球雙打排程系統</h1>
-        <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
-            <p>輸入參加人員 (5-8人建議)</p>
-            <div class="player-input-group">
-                <input type="text" id="new-player-name" placeholder="輸入名字" onkeypress="handleEnter(event)">
-                <button class="btn-success" onclick="addPlayer()" style="width: 80px;">新增</button>
+    <!-- 設定頁面 -->
+    <div id="setup-page" class="page">
+        <div class="card">
+            <h1>🏸 羽球對戰管理</h1>
+            <p style="color:#666; text-align:center; font-size:0.9rem;">輸入參加人員 (5-8人)</p>
+            
+            <div style="display:flex; gap:10px;">
+                <input type="text" id="input-name" placeholder="輸入名字 (按Enter新增)" autocomplete="off">
+                <button class="btn-success" onclick="addPlayer()" style="width:80px; border-radius:8px;">新增</button>
+            </div>
+
+            <div id="player-list" class="player-list">
+                <!-- JS 渲染名單 -->
+            </div>
+
+            <div style="margin-top: 20px;">
+                <button class="btn-lg btn-primary" onclick="startSystem()">開始排程與比賽</button>
             </div>
             
-            <div id="player-list-display" class="player-list">
-                </div>
-
-            <div class="player-input-group">
-                <button class="btn-primary" onclick="generateSchedule()">開始排程與比賽</button>
-            </div>
-            <p style="font-size: 0.8rem; color: #888; text-align: center;">如果已有上次紀錄，系統會自動載入</p>
-            <div class="reset-btn-wrapper">
-                <button class="btn-text" onclick="clearAllData()">清除所有資料重來</button>
+            <div style="margin-top: 30px; text-align: center;">
+                <button class="text-link" onclick="clearData()">⚠️ 清除所有資料重置</button>
             </div>
         </div>
     </div>
 
-    <div id="app-page" class="container">
+    <!-- 主應用頁面 -->
+    <div id="app-page" class="page">
         
-        <div class="scoreboard">
-            <div class="match-info">第 <span id="current-match-id">1</span> 場比賽</div>
-            
-            <div class="scores-container">
-                <div class="team">
-                    <div class="team-names" id="team-a-names">
-                        選手A<br>選手B
-                    </div>
-                    <div class="score-display" id="score-a">0</div>
-                    <div class="score-controls">
-                        <button class="btn-score btn-danger" onclick="updateScore('A', -1)">-</button>
-                        <button class="btn-score btn-success" onclick="updateScore('A', 1)">+</button>
+        <!-- 上半部：計分板 -->
+        <div class="scoreboard-section">
+            <div class="match-header">
+                場次 <span id="match-num" style="font-weight:bold; color:var(--primary);">1</span>
+                <span id="match-status-text" style="margin-left:10px; font-size:0.8rem; color:var(--accent);"></span>
+            </div>
+
+            <div class="scores-area">
+                <!-- 隊伍 1 -->
+                <div class="team-col">
+                    <div class="team-names" id="name-t1">選手A<br>選手B</div>
+                    <div class="score-number" id="score-t1">0</div>
+                    <div class="score-btns">
+                        <button class="btn-circle btn-danger" onclick="addScore(1, -1)">-</button>
+                        <button class="btn-circle btn-success" onclick="addScore(1, 1)">+</button>
                     </div>
                 </div>
 
                 <div class="vs-divider">VS</div>
 
-                <div class="team">
-                    <div class="team-names" id="team-b-names">
-                        選手C<br>選手D
-                    </div>
-                    <div class="score-display" id="score-b">0</div>
-                    <div class="score-controls">
-                        <button class="btn-score btn-danger" onclick="updateScore('B', -1)">-</button>
-                        <button class="btn-score btn-success" onclick="updateScore('B', 1)">+</button>
+                <!-- 隊伍 2 -->
+                <div class="team-col">
+                    <div class="team-names" id="name-t2">選手C<br>選手D</div>
+                    <div class="score-number" id="score-t2">0</div>
+                    <div class="score-btns">
+                        <button class="btn-circle btn-danger" onclick="addScore(2, -1)">-</button>
+                        <button class="btn-circle btn-success" onclick="addScore(2, 1)">+</button>
                     </div>
                 </div>
             </div>
 
-            <div class="match-actions">
-                <button class="btn-primary" onclick="finishMatch()">結束本場並記錄</button>
+            <div class="action-area">
+                <button id="finish-btn" class="btn-lg btn-primary" onclick="finishCurrentMatch()">結束本場並記錄</button>
             </div>
         </div>
 
-        <div class="schedule-container">
-            <h3 style="margin-top:0; font-size: 1rem;">賽程表</h3>
-            <div id="schedule-list">
-                </div>
-            <div class="reset-btn-wrapper" style="margin-top: 10px;">
-                 <button class="btn-text" onclick="generateMoreMatches()">+ 產生更多場次</button>
-                 <button class="btn-text" onclick="backToSetup()" style="margin-left: 15px;">修改名單</button>
+        <!-- 下半部：賽程表 -->
+        <div class="schedule-section">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3 style="font-size:1rem;">📋 賽程表</h3>
+                <button class="btn-outline" onclick="generateMatches(5)" style="font-size:0.8rem;">+ 產生更多</button>
+            </div>
+            
+            <div class="list-container" id="schedule-container">
+                <!-- JS 渲染賽程 -->
+            </div>
+
+            <div class="toolbar">
+                <button class="text-link" onclick="backToSetup()">修改名單</button>
+                <span style="font-size:0.8rem; color:#ccc;">Auto-saved</span>
             </div>
         </div>
     </div>
 
     <script>
-        // --- 資料結構 ---
-        let state = {
-            players: [], // [{name: "Alice", played: 0}, ...]
-            schedule: [], // [{id: 1, t1: [p1, p2], t2: [p3, p4], s1: 0, s2: 0, status: 'pending'|'active'|'finished'}]
-            currentMatchIndex: 0,
-            partnerships: {}, // Key: "p1-p2" (alphabetical), Value: count
-            history: [] // 紀錄誰哪一場休息，用於避免連續上場
+        // --- 資料核心 ---
+        const DEFAULT_STATE = {
+            players: [], // {name, playedCount}
+            schedule: [], // {id, t1:[], t2:[], s1, s2, status}
+            currentIdx: 0,
+            partnerships: {} // "NameA-NameB": count
         };
+
+        let state = JSON.parse(JSON.stringify(DEFAULT_STATE));
 
         // --- 初始化 ---
-        window.onload = function() {
-            loadState();
-            renderPlayerList();
-            if (state.schedule.length > 0) {
-                showAppPage();
-                renderSchedule();
-                loadCurrentMatchToScoreboard();
-            }
-        };
-
-        function handleEnter(e) {
-            if (e.key === 'Enter') addPlayer();
-        }
-
-        // --- 設定頁面邏輯 ---
-        function addPlayer() {
-            const input = document.getElementById('new-player-name');
-            const name = input.value.trim();
-            if (name && !state.players.find(p => p.name === name)) {
-                state.players.push({ name: name, played: 0 });
-                input.value = '';
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                loadData();
                 renderPlayerList();
-                saveState();
-            }
-        }
+                
+                // 綁定 Enter 鍵
+                document.getElementById('input-name').addEventListener('keypress', (e) => {
+                    if(e.key === 'Enter') addPlayer();
+                });
 
-        function renderPlayerList() {
-            const container = document.getElementById('player-list-display');
-            container.innerHTML = state.players.map((p, index) => `
-                <span class="player-tag">
-                    ${p.name} <span style="cursor:pointer; color:red; margin-left:5px;" onclick="removePlayer(${index})">×</span>
-                </span>
-            `).join('');
+                // 如果已經有賽程，直接進入主頁面
+                if (state.schedule && state.schedule.length > 0) {
+                    goToAppPage();
+                }
+            } catch (e) {
+                console.error("Init Error:", e);
+                alert("初始化錯誤，系統將重置資料。");
+                clearData();
+            }
+        });
+
+        // --- 功能邏輯: 設定頁面 ---
+        function addPlayer() {
+            const input = document.getElementById('input-name');
+            const name = input.value.trim();
+            if (!name) return;
+            
+            if (state.players.some(p => p.name === name)) {
+                alert("名字重複囉！");
+                return;
+            }
+
+            state.players.push({ name: name, playedCount: 0 });
+            input.value = '';
+            saveData();
+            renderPlayerList();
         }
 
         function removePlayer(index) {
             state.players.splice(index, 1);
+            saveData();
             renderPlayerList();
-            saveState();
+        }
+
+        function renderPlayerList() {
+            const list = document.getElementById('player-list');
+            if (state.players.length === 0) {
+                list.innerHTML = '<div style="color:#999; width:100%; text-align:center; margin-top:10px;">尚未新增人員</div>';
+                return;
+            }
+            list.innerHTML = state.players.map((p, i) => `
+                <div class="player-tag">
+                    ${p.name}
+                    <span onclick="removePlayer(${i})">×</span>
+                </div>
+            `).join('');
+        }
+
+        function startSystem() {
+            if (state.players.length < 4) {
+                alert("人數不足，至少需要 4 人才能雙打！");
+                return;
+            }
+            
+            if (state.schedule.length === 0) {
+                state.partnerships = {}; // 重置搭檔紀錄
+                generateMatches(10); // 首次生成 10 場
+            }
+            
+            goToAppPage();
+        }
+
+        // --- 功能邏輯: 核心演算法 ---
+        function generateMatches(count) {
+            const startId = state.schedule.length + 1;
+            
+            for (let i = 0; i < count; i++) {
+                // 1. 找出候選人 (所有球員)
+                // 排序權重：上場次數 (小優先) > 隨機擾動
+                let pool = [...state.players];
+                pool.sort((a, b) => {
+                    if (a.playedCount !== b.playedCount) return a.playedCount - b.playedCount;
+                    return Math.random() - 0.5;
+                });
+
+                // 取前 4 位
+                const selected = pool.slice(0, 4);
+                
+                // 更新他們的上場次數 (預先增加，確保下一場排程時已考慮)
+                selected.forEach(p => {
+                    const original = state.players.find(x => x.name === p.name);
+                    if(original) original.playedCount++;
+                });
+
+                // 2. 排列組合 (找出搭檔重複最少的組合)
+                // 組合A: (0,1) vs (2,3)
+                // 組合B: (0,2) vs (1,3)
+                // 組合C: (0,3) vs (1,2)
+                const combos = [
+                    { t1: [selected[0], selected[1]], t2: [selected[2], selected[3]] },
+                    { t1: [selected[0], selected[2]], t2: [selected[1], selected[3]] },
+                    { t1: [selected[0], selected[3]], t2: [selected[1], selected[2]] }
+                ];
+
+                // 計算權重 (過往搭檔次數總和)
+                combos.forEach(c => {
+                    const w1 = getPartnership(c.t1[0].name, c.t1[1].name);
+                    const w2 = getPartnership(c.t2[0].name, c.t2[1].name);
+                    c.weight = w1 + w2;
+                });
+
+                // 選權重最小的，若一樣則隨機
+                combos.sort((a, b) => a.weight - b.weight || (Math.random() - 0.5));
+                const best = combos[0];
+
+                // 記錄搭檔關係
+                addPartnership(best.t1[0].name, best.t1[1].name);
+                addPartnership(best.t2[0].name, best.t2[1].name);
+
+                // 推入賽程
+                state.schedule.push({
+                    id: startId + i,
+                    t1: [best.t1[0].name, best.t1[1].name],
+                    t2: [best.t2[0].name, best.t2[1].name],
+                    s1: 0,
+                    s2: 0,
+                    status: 'pending'
+                });
+            }
+            saveData();
+            renderScheduleList();
+            updateScoreBoardUI();
+        }
+
+        function getPartnership(n1, n2) {
+            const key = [n1, n2].sort().join('|');
+            return state.partnerships[key] || 0;
+        }
+
+        function addPartnership(n1, n2) {
+            const key = [n1, n2].sort().join('|');
+            state.partnerships[key] = (state.partnerships[key] || 0) + 1;
+        }
+
+        // --- 功能邏輯: 主頁面 ---
+        function goToAppPage() {
+            document.getElementById('setup-page').style.display = 'none';
+            document.getElementById('app-page').style.display = 'flex';
+            
+            // 找出第一場未完成的
+            let nextIdx = state.schedule.findIndex(m => m.status !== 'finished');
+            if (nextIdx === -1) {
+                // 假如全部都打完了，自動新增
+                generateMatches(5);
+                nextIdx = state.schedule.findIndex(m => m.status !== 'finished');
+            }
+            state.currentIdx = nextIdx;
+            
+            // 如果狀態是 pending，改成 active
+            if (state.schedule[state.currentIdx].status === 'pending') {
+                state.schedule[state.currentIdx].status = 'active';
+            }
+
+            updateScoreBoardUI();
+            renderScheduleList();
+        }
+
+        function updateScoreBoardUI() {
+            const match = state.schedule[state.currentIdx];
+            if (!match) return;
+
+            document.getElementById('match-num').textContent = match.id;
+            document.getElementById('name-t1').innerHTML = `${match.t1[0]}<br>${match.t1[1]}`;
+            document.getElementById('name-t2').innerHTML = `${match.t2[0]}<br>${match.t2[1]}`;
+            document.getElementById('score-t1').textContent = match.s1;
+            document.getElementById('score-t2').textContent = match.s2;
+            
+            // 高亮當前列表
+            renderScheduleList();
+        }
+
+        function addScore(team, delta) {
+            const match = state.schedule[state.currentIdx];
+            if (!match || match.status === 'finished') return;
+
+            if (team === 1) {
+                match.s1 = Math.max(0, match.s1 + delta);
+                document.getElementById('score-t1').textContent = match.s1;
+            } else {
+                match.s2 = Math.max(0, match.s2 + delta);
+                document.getElementById('score-t2').textContent = match.s2;
+            }
+            saveData();
+            renderScheduleList(); // 同步更新列表上的比分
+        }
+
+        function finishCurrentMatch() {
+            const match = state.schedule[state.currentIdx];
+            if(confirm(`確認結束本場比賽？\n最終比分 ${match.s1} : ${match.s2}`)) {
+                match.status = 'finished';
+                saveData();
+                goToAppPage(); // 會自動跳到下一場
+            }
+        }
+
+        function renderScheduleList() {
+            const container = document.getElementById('schedule-container');
+            container.innerHTML = state.schedule.map((m, i) => {
+                const isActive = i === state.currentIdx;
+                let rowClass = 'match-row';
+                if (m.status === 'active') rowClass += ' active';
+                if (m.status === 'finished') rowClass += ' finished';
+
+                const scoreDisplay = m.status === 'pending' ? 'vs' : `${m.s1}:${m.s2}`;
+                const scoreColor = m.status === 'pending' ? '#ddd' : 'var(--primary)';
+
+                return `
+                    <div class="${rowClass}" id="match-row-${i}">
+                        <div class="match-id">${m.id}</div>
+                        <div class="match-players">
+                            <div style="flex:1; text-align:right;">${m.t1[0]}<br>${m.t1[1]}</div>
+                            <div class="match-vs" style="color:${scoreColor}">${scoreDisplay}</div>
+                            <div style="flex:1; text-align:left;">${m.t2[0]}<br>${m.t2[1]}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // 自動捲動
+            setTimeout(() => {
+                const activeEl = document.querySelector('.match-row.active');
+                if(activeEl) activeEl.scrollIntoView({behavior: 'smooth', block: 'center'});
+            }, 100);
         }
 
         function backToSetup() {
-            if(confirm("返回修改名單可能會影響排程邏輯，確定嗎？")) {
+            if(confirm("返回修改名單可能會影響後續排程，確定嗎？")) {
                 document.getElementById('app-page').style.display = 'none';
                 document.getElementById('setup-page').style.display = 'flex';
             }
         }
 
-        function clearAllData() {
-            if(confirm("確定要清除所有資料嗎？")) {
-                localStorage.removeItem('badmintonState');
+        // --- 儲存系統 ---
+        function saveData() {
+            try {
+                localStorage.setItem('badminton_sys_v2', JSON.stringify(state));
+            } catch(e) { console.error("Save failed", e); }
+        }
+
+        function loadData() {
+            const raw = localStorage.getItem('badminton_sys_v2');
+            if (raw) {
+                try {
+                    const loaded = JSON.parse(raw);
+                    // 簡單的合併檢查，確保格式正確
+                    if (loaded.players && loaded.schedule) {
+                        state = loaded;
+                    }
+                } catch(e) {
+                    console.error("Data corrupted");
+                }
+            }
+        }
+
+        function clearData() {
+            if(confirm("這會刪除所有名單和對戰紀錄，確定重來？")) {
+                localStorage.removeItem('badminton_sys_v2');
                 location.reload();
             }
         }
 
-        // --- 排程演算法核心 ---
-        function generateSchedule() {
-            if (state.players.length < 4) {
-                alert("至少需要 4 人才能開始！");
-                return;
-            }
-
-            // 初始化 partnerships 紀錄
-            state.partnerships = {};
-            
-            // 如果是第一次生成，建立初始排程
-            if (state.schedule.length === 0) {
-                generateBatchMatches(10); // 預先生成 10 場
-            }
-
-            showAppPage();
-            renderSchedule();
-            loadCurrentMatchToScoreboard();
-            saveState();
-        }
-
-        function generateMoreMatches() {
-            generateBatchMatches(5);
-            renderSchedule();
-            saveState();
-        }
-
-        function generateBatchMatches(count) {
-            let matchIdStart = state.schedule.length + 1;
-            
-            for (let i = 0; i < count; i++) {
-                const match = createNextMatch(matchIdStart + i);
-                state.schedule.push(match);
-            }
-        }
-
-        function createNextMatch(id) {
-            // 1. 找出所有候選人，並加入隨機擾動以避免死板
-            // 規則：優先選「上場次數少」的人。
-            // 次要規則：優先選「上一場休息」的人 (由 played 數相同時的排序決定，或額外權重)
-            
-            // 複製一份球員名單進行排序計算
-            let candidates = [...state.players];
-
-            // 排序邏輯：
-            // a. 上場次數 (少 -> 多)
-            // b. 隨機 (純隨機) - 用戶要求
-            candidates.sort((a, b) => {
-                if (a.played !== b.played) return a.played - b.played;
-                return 0.5 - Math.random();
-            });
-
-            // 選出前 4 位
-            const selectedPlayers = candidates.slice(0, 4);
-            
-            // 更新上場次數
-            selectedPlayers.forEach(p => {
-                // 在原始 array 中找到並更新
-                const origin = state.players.find(op => op.name === p.name);
-                origin.played++;
-            });
-
-            // 2. 決定分組 (A/B vs C/D)
-            // 嘗試 3 種組合，選「合作次數」最少的一組
-            // 組合1: (0,1) vs (2,3)
-            // 組合2: (0,2) vs (1,3)
-            // 組合3: (0,3) vs (1,2)
-            
-            const p = selectedPlayers;
-            const combinations = [
-                { t1: [p[0], p[1]], t2: [p[2], p[3]] },
-                { t1: [p[0], p[2]], t2: [p[1], p[3]] },
-                { t1: [p[0], p[3]], t2: [p[1], p[2]] }
-            ];
-
-            // 計算每種組合的「過往搭檔權重」
-            combinations.forEach(combo => {
-                combo.weight = getPartnershipCount(combo.t1[0], combo.t1[1]) + 
-                               getPartnershipCount(combo.t2[0], combo.t2[1]);
-            });
-
-            // 選權重最小的，如果一樣則隨機
-            combinations.sort((a, b) => a.weight - b.weight || 0.5 - Math.random());
-            const bestCombo = combinations[0];
-
-            // 更新搭檔紀錄
-            addPartnership(bestCombo.t1[0], bestCombo.t1[1]);
-            addPartnership(bestCombo.t2[0], bestCombo.t2[1]);
-
-            return {
-                id: id,
-                t1: bestCombo.t1.map(x => x.name),
-                t2: bestCombo.t2.map(x => x.name),
-                s1: 0,
-                s2: 0,
-                status: 'pending' // pending, active, finished
-            };
-        }
-
-        function getPartnershipCount(p1, p2) {
-            const key = [p1.name, p2.name].sort().join('-');
-            return state.partnerships[key] || 0;
-        }
-
-        function addPartnership(p1, p2) {
-            const key = [p1.name, p2.name].sort().join('-');
-            state.partnerships[key] = (state.partnerships[key] || 0) + 1;
-        }
-
-        // --- 頁面切換與渲染 ---
-        function showAppPage() {
-            document.getElementById('setup-page').style.display = 'none';
-            document.getElementById('app-page').style.display = 'flex';
-        }
-
-        // --- 計分板邏輯 ---
-        function loadCurrentMatchToScoreboard() {
-            // 找到第一個還沒結束的比賽
-            let activeIndex = state.schedule.findIndex(m => m.status !== 'finished');
-            
-            if (activeIndex === -1) {
-                alert("所有賽程已結束，請產生更多場次！");
-                generateMoreMatches(); // 自動產生
-                activeIndex = state.schedule.findIndex(m => m.status !== 'finished');
-            }
-
-            state.currentMatchIndex = activeIndex;
-            const match = state.schedule[activeIndex];
-            
-            // 標記為進行中
-            if (match.status === 'pending') match.status = 'active';
-
-            // UI 更新
-            document.getElementById('current-match-id').innerText = match.id;
-            document.getElementById('team-a-names').innerHTML = `${match.t1[0]}<br>${match.t1[1]}`;
-            document.getElementById('team-b-names').innerHTML = `${match.t2[0]}<br>${match.t2[1]}`;
-            document.getElementById('score-a').innerText = match.s1;
-            document.getElementById('score-b').innerText = match.s2;
-
-            renderSchedule(); // 更新列表高亮
-            saveState();
-        }
-
-        function updateScore(team, delta) {
-            const match = state.schedule[state.currentMatchIndex];
-            if (!match) return;
-
-            if (team === 'A') {
-                match.s1 = Math.max(0, match.s1 + delta);
-                document.getElementById('score-a').innerText = match.s1;
-            } else {
-                match.s2 = Math.max(0, match.s2 + delta);
-                document.getElementById('score-b').innerText = match.s2;
-            }
-            saveState();
-        }
-
-        function finishMatch() {
-            const match = state.schedule[state.currentMatchIndex];
-            if (confirm(`確定結束這場比賽？\n比分: ${match.s1} - ${match.s2}`)) {
-                match.status = 'finished';
-                loadCurrentMatchToScoreboard(); // 載入下一場
-            }
-        }
-
-        function renderSchedule() {
-            const list = document.getElementById('schedule-list');
-            list.innerHTML = state.schedule.map((m, idx) => {
-                let statusClass = '';
-                if (m.status === 'active') statusClass = 'active';
-                if (m.status === 'finished') statusClass = 'finished';
-                
-                let scoreText = (m.status === 'pending') ? 'vs' : `${m.s1} : ${m.s2}`;
-                
-                return `
-                    <div class="schedule-item ${statusClass}" id="match-${idx}">
-                        <div style="flex:1; text-align:right;">${m.t1[0]}<br>${m.t1[1]}</div>
-                        <div style="padding:0 15px; text-align:center;">
-                            <div style="font-size:0.8rem; color:#999;">場次 ${m.id}</div>
-                            <div class="schedule-score">${scoreText}</div>
-                        </div>
-                        <div style="flex:1; text-align:left;">${m.t2[0]}<br>${m.t2[1]}</div>
-                    </div>
-                `;
-            }).join('');
-            
-            // 自動捲動到當前比賽
-            setTimeout(() => {
-                const activeEl = document.querySelector('.schedule-item.active');
-                if (activeEl) activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }, 100);
-        }
-
-        // --- 儲存功能 ---
-        function saveState() {
-            localStorage.setItem('badmintonState', JSON.stringify(state));
-        }
-
-        function loadState() {
-            const saved = localStorage.getItem('badmintonState');
-            if (saved) {
-                state = JSON.parse(saved);
-            }
-        }
     </script>
 </body>
 </html>
