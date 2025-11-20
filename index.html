@@ -1,835 +1,559 @@
-<!doctype html>
-<html lang="zh-Hant">
+<!DOCTYPE html>
+<html lang="zh-TW">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>羽球賽程（勾選出席，自動產生）</title>
-  <meta name="theme-color" content="#0b0f14" />
-  <style>
-    :root{ --bg:#0b0f14; --card:#121923; --text:#e6edf3; --muted:#9fb1c1; --accent:#5cc8ff; --accent-2:#8affcc; --danger:#ff6b6b; --shadow:0 10px 30px rgba(0,0,0,.35); --radius:18px; }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{
-      margin:0;
-      background:linear-gradient(180deg,#0b0f14 0%,#0f1520 100%);
-      color:var(--text);
-      font-family: ui-sans-serif, system-ui, -apple-system, "PingFang TC","Noto Sans TC","Microsoft JhengHei", Segoe UI, Roboto, Helvetica, Arial;
-      display:flex; align-items:center; justify-content:center; padding:18px;
-    }
-    .app{width:100%; max-width:none;}    
-    .grid{display:grid; grid-template-columns:1fr; gap:16px}
-    /* --- 修正點：移除了 @media 結尾多餘的 '}' --- */
-    @media (max-width:980px){ .grid{grid-template-columns:1fr} }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>羽球雙打自動排程與計分板</title>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --accent-color: #27ae60;
+            --danger-color: #e74c3c;
+            --bg-color: #f4f7f6;
+            --card-bg: #ffffff;
+        }
 
-    .card{ background: linear-gradient(180deg,#121a26,#0e1621); border:1px solid rgba(255,255,255,.06); border-radius:var(--radius); box-shadow:var(--shadow); }
-    .card header{ display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid rgba(255,255,255,.06); }
-    .card header h2{ margin:0; font-size:18px; letter-spacing:.5px; color:#cfe5ff }
-    .card .body{ padding:14px; }
+        * { box-sizing: border-box; touch-action: manipulation; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 0;
+            color: #333;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
 
-    .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+        /* 通用樣式 */
+        .container {
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 15px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
 
-    .btn{ cursor:pointer; user-select:none; background: linear-gradient(180deg,#1a2533,#152031); border:1px solid rgba(255,255,255,.08); color:var(--text); padding:18px 40px; border-radius:12px; font-weight:700; letter-spacing:.3px;font-size: 24px; }
-    .btn.primary{ background:linear-gradient(180deg,  #a1a1a1, #5d5d5d); border-color:rgba(255,255,255,.08) }
-    .btn.secondary{ background:linear-gradient(180deg,#1a2533,#152031); border-color:rgba(24,41,61,.08) }
-    .btn.danger{ background:linear-gradient(180deg,#3a1d22,#2a1619); border-color:rgba(255,107,107,.4) }
+        h1, h2 { text-align: center; margin: 10px 0; font-size: 1.2rem; color: var(--primary-color); }
+        
+        button {
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            transition: opacity 0.2s;
+        }
+        button:active { opacity: 0.8; }
 
-    .pill{ padding:6px 10px; border:1px solid rgba(255,255,255,.08); border-radius:999px; background:#0a121a; color:#cfe5ff }
-    .hint{font-size:13px; color:#cfe5ff; opacity:.8}
+        .btn-primary { background: var(--primary-color); color: white; padding: 10px 20px; width: 100%; font-size: 1rem; }
+        .btn-danger { background: var(--danger-color); color: white; }
+        .btn-success { background: var(--accent-color); color: white; }
+        
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
 
-    .stage{ min-height:calc(100vh - 220px); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding: calc(env(safe-area-inset-top,0px) + 34px) 16px 20px; text-align:center;margin-top:400px; }
+        /* 設定頁面 */
+        #setup-page { display: block; }
+        .player-input-group { display: flex; gap: 10px; margin-bottom: 10px; }
+        .player-list { max-height: 300px; overflow-y: auto; margin-bottom: 20px; }
+        .player-tag { 
+            display: inline-block; 
+            background: #e0e0e0; 
+            padding: 5px 10px; 
+            border-radius: 15px; 
+            margin: 3px; 
+            font-size: 0.9rem;
+        }
 
-    .teams{ display:grid; gap:12px; width:100%; }
-    .team{ display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px; background:linear-gradient(180deg,#0e1a26,#0c1621); border:1px solid rgba(255,255,255,.06); border-radius:16px; padding:16px }
-    .players{ display:flex; gap:8px; align-items:center; justify-content:center; flex-wrap:nowrap; white-space:nowrap; overflow-x:auto }
+        /* 主應用頁面 (計分板 + 列表) */
+        #app-page { display: none; height: 100%; flex-direction: column; }
 
-    /* 強化名字、弱化 VS */
-    .badge{ padding:10px 48px; border-radius:999px; background:linear-gradient(180deg,#21334a,#1c2a3f); border:1px solid rgba(255,255,255,.10); font-weight:900; font-size:36px; color:#e9f3ff }
-    /* 名字色階變體（左右隊） */
-    .side{ padding:10px; border-radius:14px; background:transparent; border:none; box-shadow:none; }
-    .side-left .badge{
-      background:linear-gradient(180deg, rgba(92,200,255,.18), rgba(92,200,255,.06));
-      border:1px solid rgba(92,200,255,.45);
-      box-shadow: inset 0 0 0 1px rgba(92,200,255,.12);
-      color:#eaf6ff;
-    }
-    .side-right .badge{
-      background:linear-gradient(180deg, rgba(138,255,204,.18), rgba(138,255,204,.06));
-      border:1px solid rgba(138,255,204,.45);
-      box-shadow: inset 0 0 0 1px rgba(138,255,204,.12);
-      color:#eefff8;
-    }
+        /* 計分板區域 - 核心功能 */
+        .scoreboard {
+            flex: 2; /* 佔據較大比例 */
+            background: var(--card-bg);
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            margin-bottom: 15px;
+            position: relative;
+        }
 
-    .progress{ width:100%; height:8px; border-radius:999px; background:#0a1219; overflow:hidden; border:1px solid rgba(255,255,255,.06) }
-    .progress>div{ height:100%; width:0%; background:linear-gradient(90deg,var(--accent),var(--accent-2)); transition:width .25s ease }
+        .match-info {
+            text-align: center;
+            font-size: 1rem;
+            color: #7f8c8d;
+            margin-bottom: 5px;
+        }
 
-    .scoreboard{ display:grid; grid-template-columns:1fr auto 1fr; gap:12px; align-items:center; width:100%; margin-top:40px;margin-bottom: 40px; padding:40px; border:1px solid rgba(255,255,255,.06); border-radius:16px; background:linear-gradient(180deg,#121a26,#0e1621);  }
-    .score{ display:flex; flex-direction:column; align-items:center; gap:10px }
-    /* 縮小比分，以凸顯組合 */
-    .score .value{ font-size: 120px; font-weight:900; padding:32px 60px; border-radius:18px; border:1px solid rgba(255,255,255,.10); background:#0b121b; min-width:88px }
+        .scores-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 100%;
+        }
 
-    .score-left,.score-right{ background:transparent; border:none; padding:0 }
-    .score-left .value{ background:rgba(92,200,255,.12); border-color:rgba(92,200,255,.35) }
-    .score-right .value{ background:rgba(138,255,204,.12); border-color:rgba(138,255,204,.35) }
+        .team {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+        }
 
-    .counter{font-size:28px; color:#9fb1c1;margin-top:60px; }
-    textarea{ width:100%; min-height:260px; background:#0b121b; color:var(--text); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:12px;font-size: 28px; }
-    .chips{ display:flex; flex-wrap:wrap; gap:8px }
-    .chip{ display:inline-flex; align-items:center; gap:8px; padding:8px 10px; border-radius:999px; border:1px solid rgba(255,255,255,.12); background:#0f1722;font-size: 18px; }
-    .chip input{ accent-color:#70d1ff }
+        .team-names {
+            font-size: 1.1rem;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 10px;
+            min-height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
 
-    @media (max-width: 768px) {
-      .stage { padding-top: calc(env(safe-area-inset-top, 0px) + 580px); }
-    }
-  .card.right{ width:70%; justify-self:center; margin-left:auto; margin-right:auto; }
-    @media (max-width:768px){ .card.right{ width:94%; } }
-  </style>
+        .score-display {
+            font-size: 5rem;
+            font-weight: 800;
+            line-height: 1;
+            color: var(--primary-color);
+            margin: 10px 0;
+        }
+
+        .score-controls {
+            display: flex;
+            gap: 15px;
+        }
+
+        .btn-score {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .vs-divider {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #ccc;
+            padding: 0 10px;
+        }
+
+        .match-actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .match-actions button {
+            flex: 1;
+            padding: 12px;
+            font-size: 1rem;
+        }
+
+        /* 賽程列表區域 */
+        .schedule-container {
+            flex: 1; /* 佔據剩餘空間 */
+            background: var(--card-bg);
+            border-radius: 15px 15px 0 0;
+            box-shadow: 0 -4px 15px rgba(0,0,0,0.05);
+            padding: 15px;
+            overflow-y: auto;
+            border-top: 1px solid #eee;
+        }
+
+        .schedule-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+        }
+        .schedule-item.active {
+            background-color: #e8f8f5;
+            border-left: 4px solid var(--accent-color);
+        }
+        .schedule-item.finished {
+            opacity: 0.6;
+            background-color: #f9f9f9;
+        }
+        .schedule-score {
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        /* 重置按鈕小角落 */
+        .reset-btn-wrapper {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .btn-text {
+            background: none;
+            color: #999;
+            font-size: 0.8rem;
+            text-decoration: underline;
+        }
+    </style>
 </head>
 <body>
-  <div class="app grid">
-    <section class="card left">
-      <header>
-        <h2>賽程舞台</h2>
-        <div class="row"><span class="pill" id="total-pill">共 0 場</span><span class="pill" id="status-pill">就緒</span></div>
-      </header>
-      <div class="body">
-        <div class="stage">
-          <div class="counter" id="counter">第 0 / 0 場</div>
-          <div class="teams" id="teams"></div>
 
-          <div class="scoreboard" aria-label="記分板">
-            <div class="score score-left" id="leftScoreWrap">
-              <div class="value" id="leftScore">0</div>
-              <div class="row">
-                <button class="btn secondary" id="leftMinus">-1</button>
-                <button class="btn primary" id="leftPlus">+1</button>
-              </div>
-            </div>
-            <div class="row" style="flex-direction:column">
-              <button class="btn" id="swapBtn">左右交換</button>
-              <button class="btn danger" id="resetScoreBtn">重置比分</button>
-            </div>
-            <div class="score score-right" id="rightScoreWrap">
-              <div class="value" id="rightScore">0</div>
-              <div class="row">
-                <button class="btn secondary" id="rightMinus">-1</button>
-                <button class="btn primary" id="rightPlus">+1</button>
-              </div>
-            </div>
-          </div>
+    <div id="setup-page" class="container">
+        <h1>🏸 羽球雙打排程系統</h1>
+        <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
+            <p>輸入參加人員 (5-8人建議)</p>
+            <div class="player-input-group">
+                <input type="text" id="new-player-name" placeholder="輸入名字" onkeypress="handleEnter(event)">
+                <button class="btn-success" onclick="addPlayer()" style="width: 80px;">新增</button>
+            </div>
+            
+            <div id="player-list-display" class="player-list">
+                </div>
 
-          <div class="progress"><div id="bar"></div></div>
-          <div class="row" style="margin-top:10px">
-            <button class="btn" id="prevBtn">← 上一場（P）</button>
-            <button class="btn primary" id="nextBtn">下一場（N） →</button>
-          </div>
-        </div>
-      </div>
-    </section>
+            <div class="player-input-group">
+                <button class="btn-primary" onclick="generateSchedule()">開始排程與比賽</button>
+            </div>
+            <p style="font-size: 0.8rem; color: #888; text-align: center;">如果已有上次紀錄，系統會自動載入</p>
+            <div class="reset-btn-wrapper">
+                <button class="btn-text" onclick="clearAllData()">清除所有資料重來</button>
+            </div>
+        </div>
+    </div>
 
-    <section class="card right">
-      <header><h2>勾選出席 → 自動產生</h2></header>
-      <div class="body">
-        <div class="row" style="justify-content:space-between;align-items:center">
-          <div><strong>固定 8 人名單</strong></div>
-          <div class="row" style="flex:0 0 auto">
-            <button class="btn" id="allToggle">全選/全不選</button>
-            <button class="btn primary" id="autoGenBtn">產生賽程</button>
-            <button class="btn danger" id="hardReset">硬重置</button>
-          </div>
-        </div>
-        <div class="chips" id="roster"></div>
-        <div class="hint">請勾選今天出席的人（支援 4–8 人）。系統會自動選擇場數與規則，計算時間較長請稍候。</div>
+    <div id="app-page" class="container">
+        
+        <div class="scoreboard">
+            <div class="match-info">第 <span id="current-match-id">1</span> 場比賽</div>
+            
+            <div class="scores-container">
+                <div class="team">
+                    <div class="team-names" id="team-a-names">
+                        選手A<br>選手B
+                    </div>
+                    <div class="score-display" id="score-a">0</div>
+                    <div class="score-controls">
+                        <button class="btn-score btn-danger" onclick="updateScore('A', -1)">-</button>
+                        <button class="btn-score btn-success" onclick="updateScore('A', 1)">+</button>
+                    </div>
+                </div>
 
-        <div style="margin-top:8px">
-          <strong>賽程清單</strong>
-          <textarea id="inputArea" spellcheck="false" placeholder="每行：A + B vs C + D"></textarea>
-          <div class="row" style="margin-top:8px">
-            <button class="btn" id="loadBtn">載入賽程 → 舞台</button>
-            <button class="btn" id="shuffleOrderBtn">打散順序</button>
-            <button class="btn" id="resetBtn">重置到第 1 場</button>
-          </div>
-        </div>
-      </div>
-    </section>
-  </div>
+                <div class="vs-divider">VS</div>
 
-  <script>
-    // ---------- Setup ----------
-    const DEFAULT_PLAYERS=['Judy','Jesha','Lucas','Doris','Iris','Luna','Mars','Soloman'];
-    const STORAGE_KEY='badminton-pick-v2';
+                <div class="team">
+                    <div class="team-names" id="team-b-names">
+                        選手C<br>選手D
+                    </div>
+                    <div class="score-display" id="score-b">0</div>
+                    <div class="score-controls">
+                        <button class="btn-score btn-danger" onclick="updateScore('B', -1)">-</button>
+                        <button class="btn-score btn-success" onclick="updateScore('B', 1)">+</button>
+                    </div>
+                </div>
+            </div>
 
-    const rosterEl=document.getElementById('roster');
-    function renderRoster(){
-      rosterEl.innerHTML='';
-      DEFAULT_PLAYERS.forEach(p=>{
-        const el=document.createElement('label');
-        el.className='chip';
-        el.innerHTML = `\n          <input type="checkbox" data-name="${p}" checked> ${p}\n        `;
-        rosterEl.appendChild(el);
-      });
-    }
-    function getAttendees(){
-      return Array.from(rosterEl.querySelectorAll('input[type=checkbox]'))
-        .filter(cb=>cb.checked).map(cb=>cb.getAttribute('data-name'));
-    }
+            <div class="match-actions">
+                <button class="btn-primary" onclick="finishMatch()">結束本場並記錄</button>
+            </div>
+        </div>
 
-    document.getElementById('allToggle').onclick=()=>{
-      const boxes=[...rosterEl.querySelectorAll('input[type=checkbox]')];
-      const all=boxes.every(b=>b.checked);
-      boxes.forEach(b=>b.checked=!all);
-    };
+        <div class="schedule-container">
+            <h3 style="margin-top:0; font-size: 1rem;">賽程表</h3>
+            <div id="schedule-list">
+                </div>
+            <div class="reset-btn-wrapper" style="margin-top: 10px;">
+                 <button class="btn-text" onclick="generateMoreMatches()">+ 產生更多場次</button>
+                 <button class="btn-text" onclick="backToSetup()" style="margin-left: 15px;">修改名單</button>
+            </div>
+        </div>
+    </div>
 
-    const inputArea=document.getElementById('inputArea');
-    const teamsEl=document.getElementById('teams');
-    const counterEl=document.getElementById('counter');
-    const totalPill=document.getElementById('total-pill');
-    const statusPill=document.getElementById('status-pill');
+    <script>
+        // --- 資料結構 ---
+        let state = {
+            players: [], // [{name: "Alice", played: 0}, ...]
+            schedule: [], // [{id: 1, t1: [p1, p2], t2: [p3, p4], s1: 0, s2: 0, status: 'pending'|'active'|'finished'}]
+            currentMatchIndex: 0,
+            partnerships: {}, // Key: "p1-p2" (alphabetical), Value: count
+            history: [] // 紀錄誰哪一場休息，用於避免連續上場
+        };
 
-    let matches=[]; let idx=0; let scores={};
+        // --- 初始化 ---
+        window.onload = function() {
+            loadState();
+            renderPlayerList();
+            if (state.schedule.length > 0) {
+                showAppPage();
+                renderSchedule();
+                loadCurrentMatchToScoreboard();
+            }
+        };
 
-    function status(s){ statusPill.textContent=s; }
-    function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify({text:inputArea.value, idx, scores})); }
-    function load(){
-      try{
-        const raw=localStorage.getItem(STORAGE_KEY);
-        if(raw){
-          const d=JSON.parse(raw);
-          inputArea.value=(d.text||'');
-          idx=d.idx||0;
-          scores=d.scores||{};
-        }
-      }catch(e){}
-      parse(); render();
-    }
+        function handleEnter(e) {
+            if (e.key === 'Enter') addPlayer();
+        }
 
-    document.getElementById('hardReset').onclick=()=>{
-      localStorage.removeItem(STORAGE_KEY);
-      inputArea.value=''; matches=[]; idx=0; scores={};
-      render(); status('已清空');
-    };
+        // --- 設定頁面邏輯 ---
+        function addPlayer() {
+            const input = document.getElementById('new-player-name');
+            const name = input.value.trim();
+            if (name && !state.players.find(p => p.name === name)) {
+                state.players.push({ name: name, played: 0 });
+                input.value = '';
+                renderPlayerList();
+                saveState();
+            }
+        }
 
-    // ---------- Parsing / Rendering ----------
-    function normalizeVs(s){
-      s=s.replace(/[\u3000]/g,' '); // 先保留：若輸入含反斜線序列
-      s=s.replace(/[\n\r]/g,' ');
-      s=s.replace(/[\u3000]/g,' ');
-      s=s.replace(/\s+/g,' ').trim();
-      s=s.replace(/\s*(?:vs\.?|VS\.?|Vs\.?|v\.|V\.|對|對上|對戰|vs：|vs:)\s*/g,' vs ');
-      s=s.replace(/[\u3000]/g,' ');
-      s = s.replace(/[\u3000]/g, ' ');
-      return s;
-    }
-    function normalizeVs2(s){
-      s=s.replace(/[\u3000]/g,' ');
-      s=s.replace(/\s+/g,' ').trim();
-      s=s.replace(/\s*(?:vs\.?|VS\.?|Vs\.?|v\.|V\.|對|對上|對戰|vs：|vs:)\s*/g,' vs ');
-      return s;
-    }
+        function renderPlayerList() {
+            const container = document.getElementById('player-list-display');
+            container.innerHTML = state.players.map((p, index) => `
+                <span class="player-tag">
+                    ${p.name} <span style="cursor:pointer; color:red; margin-left:5px;" onclick="removePlayer(${index})">×</span>
+                </span>
+            `).join('');
+        }
 
-    function splitNames(t){
-      let arr=t.split(/\s*(?:\+|、|，|,|＆|&)\s*/).filter(Boolean);
-      if(arr.length===1){ arr=t.split(/\s+/).filter(Boolean); }
-      return arr;
-    }
-    function parseLine(line){
-      const norm=normalizeVs2(line);
-      const pr=norm.split(/\s+vs\s+/i);
-      if(pr.length!==2) return null;
-      const L=splitNames(pr[0]), R=splitNames(pr[1]);
-      if(L.length!==2||R.length!==2) return null;
-      return {left:L,right:R,raw:norm};
-    }
-    function parse(){
-      matches=[];
-      const cleanText=(inputArea.value||'');
-      cleanText.split(/\r?\n/).forEach(ln=>{
-        ln=ln.replace(/\r/g,'').trim();
-        if(!ln) return;
-        const m=parseLine(ln);
-        if(m) matches.push(m);
-      });
-      if(idx>=matches.length) idx=Math.max(0,matches.length-1);
-      totalPill.textContent=`共 ${matches.length} 場`;
-      save();
-    }
+        function removePlayer(index) {
+            state.players.splice(index, 1);
+            renderPlayerList();
+            saveState();
+        }
 
-    function ensureScore(){ if(!scores[idx]) scores[idx]={l:0,r:0,swapped:false}; }
-    function renderScores(){ ensureScore(); document.getElementById('leftScore').textContent=scores[idx].l; document.getElementById('rightScore').textContent=scores[idx].r; }
+        function backToSetup() {
+            if(confirm("返回修改名單可能會影響排程邏輯，確定嗎？")) {
+                document.getElementById('app-page').style.display = 'none';
+                document.getElementById('setup-page').style.display = 'flex';
+            }
+        }
 
-    function render(){
-      teamsEl.innerHTML='';
-      if(!matches.length){
-        counterEl.textContent='第 0 / 0 場';
-        setProgress(0); renderScores();
-        return;
-      }
-      counterEl.textContent=`第 ${idx+1} / ${matches.length} 場`;
-      setProgress((idx+1)/matches.length);
-      ensureScore();
-      const swapped=!!scores[idx].swapped;
-      const lp=swapped?matches[idx].right:matches[idx].left;
-      const rp=swapped?matches[idx].left:matches[idx].right;
-      const make=arr=>{
-        const w=document.createElement('div');
-        w.className='players';
-        arr.forEach(n=>{ const b=document.createElement('span'); b.className='badge'; b.textContent=n; w.appendChild(b); });
-        return w;
-      };
-      const team=document.createElement('div'); team.className='team';
-      const L=document.createElement('div'); const VS=document.createElement('div'); const R=document.createElement('div');
-      L.className='side side-left';
-      R.className='side side-right';
-      VS.className='vs'; VS.textContent='VS';
-      L.appendChild(make(lp)); R.appendChild(make(rp));
-      team.appendChild(L); team.appendChild(VS); team.appendChild(R);
-      teamsEl.appendChild(team);
-      renderScores();
-    }
+        function clearAllData() {
+            if(confirm("確定要清除所有資料嗎？")) {
+                localStorage.removeItem('badmintonState');
+                location.reload();
+            }
+        }
 
-    function setProgress(ratio){
-      const bar = document.getElementById('bar');
-      if(!bar){
-        const pr = document.createElement('div'); pr.className='progress';
-        const inner = document.createElement('div'); inner.id='bar'; pr.appendChild(inner);
-        document.querySelector('.stage').appendChild(pr);
-      }
-      document.getElementById('bar').style.width=(ratio*100).toFixed(1)+'%';
-    }
+        // --- 排程演算法核心 ---
+        function generateSchedule() {
+            if (state.players.length < 4) {
+                alert("至少需要 4 人才能開始！");
+                return;
+            }
 
-    // Nav buttons
-    document.getElementById('nextBtn').onclick=()=>{ if(matches.length){ idx=(idx+1)%matches.length; render(); save(); } };
-    document.getElementById('prevBtn').onclick=()=>{ if(matches.length){ idx=(idx-1+matches.length)%matches.length; render(); save(); } };
-    document.getElementById('resetBtn').onclick=()=>{ idx=0; render(); save(); status('已回到第 1 場'); };
-    document.getElementById('swapBtn').onclick=()=>{ ensureScore(); scores[idx].swapped=!scores[idx].swapped; render(); save(); };
+            // 初始化 partnerships 紀錄
+            state.partnerships = {};
+            
+            // 如果是第一次生成，建立初始排程
+            if (state.schedule.length === 0) {
+                generateBatchMatches(10); // 預先生成 10 場
+            }
 
-    // Scoring
-    document.getElementById('leftPlus').onclick=()=>{ ensureScore(); scores[idx].l=Math.min(30,scores[idx].l+1); renderScores(); save(); };
-    document.getElementById('leftMinus').onclick=()=>{ ensureScore(); scores[idx].l=Math.max(0,scores[idx].l-1); renderScores(); save(); };
-    document.getElementById('rightPlus').onclick=()=>{ ensureScore(); scores[idx].r=Math.min(30,scores[idx].r+1); renderScores(); save(); };
-    document.getElementById('rightMinus').onclick=()=>{ ensureScore(); scores[idx].r=Math.max(0,scores[idx].r-1); renderScores(); save(); };
-    document.getElementById('resetScoreBtn').onclick=()=>{ ensureScore(); scores[idx].l=0; scores[idx].r=0; renderScores(); save(); };
+            showAppPage();
+            renderSchedule();
+            loadCurrentMatchToScoreboard();
+            saveState();
+        }
 
-    // Load / Shuffle
-    document.getElementById('loadBtn').onclick=()=>{ parse(); idx=0; render(); status('已載入'); };
-    document.getElementById('shuffleOrderBtn').onclick=()=>{
-      parse(); if(!matches.length){ status('沒有賽程可打散'); return; }
-      for(let i=matches.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [matches[i],matches[j]]=[matches[j],matches[i]]; }
-      inputArea.value=matches.map(m=>`${m.left[0]} + ${m.left[1]} vs ${m.right[0]} + ${m.right[1]}`).join('\n');
-      parse(); idx=0; scores={}; render(); save(); status('已打散順序');
-    };
+        function generateMoreMatches() {
+            generateBatchMatches(5);
+            renderSchedule();
+            saveState();
+        }
 
-    // ---------- Generator（等量出賽 + 防重複） ----------
-    function C(n,k){ if(k<0||k>n) return 0; if(k===0||k===n) return 1; let r=1; for(let i=1;i<=k;i++){ r = r*(n-(k-i))/i; } return Math.round(r); }
-    function chooseM(N){ if(N===8) return 20; if(N===7) return 21; if(N===6) return 18; if(N===5) return 15; if(N===4) return 12; return 0; }
-    function minFeasibleTmax(N){ const M=chooseM(N); if(!M) return 0; if(N===7&&M===21) return 2; const avg=(2*M)/C(N,2); return Math.ceil(avg); }
-    function pairsOfFour([a,b,c,d]){ return [[[a,b],[c,d]], [[a,c],[b,d]], [[a,d],[b,c]]]; }
-    function pairId(p){ return p.slice().sort().join('&'); }
-    function matchKey(m){ const t1=pairId(m[0]); const t2=pairId(m[1]); return [t1,t2].sort().join(' vs '); }
+        function generateBatchMatches(count) {
+            let matchIdStart = state.schedule.length + 1;
+            
+            for (let i = 0; i < count; i++) {
+                const match = createNextMatch(matchIdStart + i);
+                state.schedule.push(match);
+            }
+        }
 
-    // === (通用) 列舉 N 人中所有 C(N,4) * 3 種唯一對戰 ===
-    function generateAllUniqueMatches(att){
-      const players=att.slice();
-      const combs=[];
-      function choose4(start, path){
-        if(path.length===4){ combs.push(path.slice()); return; }
-        for(let i=start;i<players.length;i++){ path.push(players[i]); choose4(i+1, path); path.pop(); }
-      }
-      choose4(0,[]);
-      const all=[];
-      combs.forEach(four=>{ const pr=pairsOfFour(four); pr.forEach(m=> all.push(m)); });
-      // N=4, C(4,4)*3 = 3
-      // N=5, C(5,4)*3 = 15
-      // N=6, C(6,4)*3 = 45
-      // N=7, C(7,4)*3 = 105
-      // N=8, C(8,4)*3 = 210
-      return all;
-    }
+        function createNextMatch(id) {
+            // 1. 找出所有候選人，並加入隨機擾動以避免死板
+            // 規則：優先選「上場次數少」的人。
+            // 次要規則：優先選「上一場休息」的人 (由 played 數相同時的排序決定，或額外權重)
+            
+            // 複製一份球員名單進行排序計算
+            let candidates = [...state.players];
 
-    // === (通用) 完美排程搜尋器 (N=6, 7, 8) ===
-    // 從 all 裡面挑 M 場，滿足 K_Max、均衡、四人組不相鄰
-    function findPerfectSchedule(att, M, K_Max=2) {
-      const N = att.length;
-      const target = (4 * M) / N;
-      
-      // 檢查是否能整除
-      if (target % 1 !== 0) {
-          throw new Error(`N=${N}, M=${M} 無法整除 (target=${target})，無法均衡。`);
-      }
+            // 排序邏輯：
+            // a. 上場次數 (少 -> 多)
+            // b. 隨機 (純隨機) - 用戶要求
+            candidates.sort((a, b) => {
+                if (a.played !== b.played) return a.played - b.played;
+                return 0.5 - Math.random();
+            });
 
-      const all = generateAllUniqueMatches(att); // 使用通用函式
-      if (M > all.length) {
-          throw new Error(`N=${N} 需求 M=${M} 場，但唯一組合僅 ${all.length} 場。`);
-      }
+            // 選出前 4 位
+            const selectedPlayers = candidates.slice(0, 4);
+            
+            // 更新上場次數
+            selectedPlayers.forEach(p => {
+                // 在原始 array 中找到並更新
+                const origin = state.players.find(op => op.name === p.name);
+                origin.played++;
+            });
 
-      const idxOf = new Map(att.map((n, i) => [n, i]));
-      const matchPlayersIdx = all.map(m => [...m[0], ...m[1]].map(n => idxOf.get(n)));
-      const fourIds = matchPlayersIdx.map(arr => arr.slice().sort((a, b) => a - b).join('-'));
+            // 2. 決定分組 (A/B vs C/D)
+            // 嘗試 3 種組合，選「合作次數」最少的一組
+            // 組合1: (0,1) vs (2,3)
+            // 組合2: (0,2) vs (1,3)
+            // 組合3: (0,3) vs (1,2)
+            
+            const p = selectedPlayers;
+            const combinations = [
+                { t1: [p[0], p[1]], t2: [p[2], p[3]] },
+                { t1: [p[0], p[2]], t2: [p[1], p[3]] },
+                { t1: [p[0], p[3]], t2: [p[1], p[2]] }
+            ];
 
-      // adjacency: 每位球員的候選比賽索引列表
-      const adj = Array.from({ length: N }, () => []);
-      for (let mi = 0; mi < all.length; mi++) {
-          for (const pi of matchPlayersIdx[mi]) adj[pi].push(mi);
-      }
-      
-      // 隨機打散，讓解空間每次不同
-      for (let pi = 0; pi < N; pi++) {
-          const l = adj[pi];
-          for (let i = l.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0;[l[i], l[j]] = [l[j], l[i]]; }
-      }
+            // 計算每種組合的「過往搭檔權重」
+            combinations.forEach(combo => {
+                combo.weight = getPartnershipCount(combo.t1[0], combo.t1[1]) + 
+                               getPartnershipCount(combo.t2[0], combo.t2[1]);
+            });
 
-      const used = new Array(all.length).fill(false);
-      const counts = new Array(N).fill(0);
-      const picked = [];
-      const streak = new Array(N).fill(0);
+            // 選權重最小的，如果一樣則隨機
+            combinations.sort((a, b) => a.weight - b.weight || 0.5 - Math.random());
+            const bestCombo = combinations[0];
 
-      function remainingAvailableFor(pi) {
-          let available = 0; const list = adj[pi];
-          for (let k = 0; k < list.length; k++) { const mi = list[k]; if (!used[mi]) available++; }
-          return available;
-      }
-      function canSatisfyAll() {
-          for (let pi = 0; pi < N; pi++) {
-              const need = target - counts[pi];
-              if (need < 0) return false;
-              if (need > 0 && remainingAvailableFor(pi) < need) return false;
-          }
-          return true;
-      }
-      function choosePivot() {
-          // 優先選「需求最大，且目前連續次數高」的球員作為 pivot，降低連三風險
-          let pivot = 0; let bestScore = -1;
-          for (let pi = 0; pi < N; pi++) {
-              const need = target - counts[pi];
-              const score = need * 10 + streak[pi]; // 權重：先補需求，再考慮連續
-              if (score > bestScore) { bestScore = score; pivot = pi; }
-          }
-          return pivot;
-      }
+            // 更新搭檔紀錄
+            addPartnership(bestCombo.t1[0], bestCombo.t1[1]);
+            addPartnership(bestCombo.t2[0], bestCombo.t2[1]);
 
-      function dfs(depth) {
-          if (depth === M) {
-              for (let pi = 0; pi < N; pi++) if (counts[pi] !== target) return false;
-              return true;
-          }
-          const pivot = choosePivot();
-          // 候選：包含 pivot、未使用、且不會讓任何人超過 target
-          const cand = [];
-          for (const mi of adj[pivot]) {
-              if (used[mi]) continue;
-              // 相鄰四人組不可相同
-              if (picked.length) { const prevMi = picked[picked.length - 1]; if (fourIds[mi] === fourIds[prevMi]) continue; }
-              const players = matchPlayersIdx[mi];
-              let ok = true; for (const pi of players) { if (counts[pi] >= target) { ok = false; break; } }
-              if (!ok) continue;
-              cand.push(mi);
-          }
-          // 依「總缺口」大到小排序，優先填補缺口
-          const deficitSum = arr => arr.reduce((s, pi) => s + (target - counts[pi]), 0);
-          cand.sort((a, b) => deficitSum(matchPlayersIdx[b]) - deficitSum(matchPlayersIdx[a]));
+            return {
+                id: id,
+                t1: bestCombo.t1.map(x => x.name),
+                t2: bestCombo.t2.map(x => x.name),
+                s1: 0,
+                s2: 0,
+                status: 'pending' // pending, active, finished
+            };
+        }
 
-          for (const mi of cand) {
-              const players = matchPlayersIdx[mi];
-              // 先檢查連續場次是否會超過 K_Max
-              let okConsec = true;
-              for (let pi = 0; pi < N; pi++) {
-                  const inMatch = players.includes(pi);
-                  const nextStreak = inMatch ? streak[pi] + 1 : 0;
-                  if (nextStreak > K_Max) { okConsec = false; break; }
-              }
-              if (!okConsec) continue;
+        function getPartnershipCount(p1, p2) {
+            const key = [p1.name, p2.name].sort().join('-');
+            return state.partnerships[key] || 0;
+        }
 
-              // Apply
-              used[mi] = true;
-              const prevStreak = streak.slice();
-              for (const pi of players) counts[pi]++;
-              for (let pi = 0; pi < N; pi++) streak[pi] = players.includes(pi) ? streak[pi] + 1 : 0;
+        function addPartnership(p1, p2) {
+            const key = [p1.name, p2.name].sort().join('-');
+            state.partnerships[key] = (state.partnerships[key] || 0) + 1;
+        }
 
-              if (canSatisfyAll()) {
-                  picked.push(mi);
-                  if (dfs(depth + 1)) return true;
-                  picked.pop();
-              }
+        // --- 頁面切換與渲染 ---
+        function showAppPage() {
+            document.getElementById('setup-page').style.display = 'none';
+            document.getElementById('app-page').style.display = 'flex';
+        }
 
-              // Revert
-              for (const pi of players) counts[pi]--;
-              for (let pi = 0; pi < N; pi++) streak[pi] = prevStreak[pi];
-              used[mi] = false;
-          }
-          return false;
-      }
+        // --- 計分板邏輯 ---
+        function loadCurrentMatchToScoreboard() {
+            // 找到第一個還沒結束的比賽
+            let activeIndex = state.schedule.findIndex(m => m.status !== 'finished');
+            
+            if (activeIndex === -1) {
+                alert("所有賽程已結束，請產生更多場次！");
+                generateMoreMatches(); // 自動產生
+                activeIndex = state.schedule.findIndex(m => m.status !== 'finished');
+            }
 
-      const ok = dfs(0);
-      if (!ok) throw new Error(`N=${N}, M=${M}, K=${K_Max} 未找到均衡且唯一的解。`);
-      
-      const result = picked.map(mi => all[mi]);
-      // 不再洗牌：保留 DFS 次序，以維持所有約束
-      return result;
-    }
+            state.currentMatchIndex = activeIndex;
+            const match = state.schedule[activeIndex];
+            
+            // 標記為進行中
+            if (match.status === 'pending') match.status = 'active';
 
-    // === N=5：列舉全 15 場唯一對戰，回溯排列使連續出場 ≤ 4（每人自然 12 場） ===
-    function generateScheduleN5(att){
-      const N=5, M=15;
-      const players=att.slice();
+            // UI 更新
+            document.getElementById('current-match-id').innerText = match.id;
+            document.getElementById('team-a-names').innerHTML = `${match.t1[0]}<br>${match.t1[1]}`;
+            document.getElementById('team-b-names').innerHTML = `${match.t2[0]}<br>${match.t2[1]}`;
+            document.getElementById('score-a').innerText = match.s1;
+            document.getElementById('score-b').innerText = match.s2;
 
-      function allUniqueMatchesN5(list){
-        const res=[];
-        for(let rest=0; rest<list.length; rest++){
-          const four=list.filter((_,i)=>i!==rest);
-          const pr=pairsOfFour(four);
-          pr.forEach(m=>res.push(m));
-        }
-        return res; // 15 場
-      }
+            renderSchedule(); // 更新列表高亮
+            saveState();
+        }
 
-      const all=allUniqueMatchesN5(players);
-      const idxOf = new Map(players.map((n,i)=>[n,i]));
-      const matchPlayersIdx = all.map(m => [...m[0],...m[1]].map(n => idxOf.get(n)));
+        function updateScore(team, delta) {
+            const match = state.schedule[state.currentMatchIndex];
+            if (!match) return;
 
-      const used = new Array(all.length).fill(false);
-      const streak = new Array(N).fill(0);
-      const order = [];
+            if (team === 'A') {
+                match.s1 = Math.max(0, match.s1 + delta);
+                document.getElementById('score-a').innerText = match.s1;
+            } else {
+                match.s2 = Math.max(0, match.s2 + delta);
+                document.getElementById('score-b').innerText = match.s2;
+            }
+            saveState();
+        }
 
-      function wouldExceed(mi){
-        const inMatch = new Array(N).fill(false);
-        for(const pi of matchPlayersIdx[mi]) inMatch[pi]=true;
-        for(let i=0;i<N;i++){
-          const ns = inMatch[i] ? streak[i]+1 : 0;
-          if(ns>4) return true;
-        }
-        return false;
-      }
+        function finishMatch() {
+            const match = state.schedule[state.currentMatchIndex];
+            if (confirm(`確定結束這場比賽？\n比分: ${match.s1} - ${match.s2}`)) {
+                match.status = 'finished';
+                loadCurrentMatchToScoreboard(); // 載入下一場
+            }
+        }
 
-      function choosePivot(){
-        let best=0;
-        for(let i=1;i<N;i++) if(streak[i]>streak[best]) best=i;
-        return best;
-      }
+        function renderSchedule() {
+            const list = document.getElementById('schedule-list');
+            list.innerHTML = state.schedule.map((m, idx) => {
+                let statusClass = '';
+                if (m.status === 'active') statusClass = 'active';
+                if (m.status === 'finished') statusClass = 'finished';
+                
+                let scoreText = (m.status === 'pending') ? 'vs' : `${m.s1} : ${m.s2}`;
+                
+                return `
+                    <div class="schedule-item ${statusClass}" id="match-${idx}">
+                        <div style="flex:1; text-align:right;">${m.t1[0]}<br>${m.t1[1]}</div>
+                        <div style="padding:0 15px; text-align:center;">
+                            <div style="font-size:0.8rem; color:#999;">場次 ${m.id}</div>
+                            <div class="schedule-score">${scoreText}</div>
+                        </div>
+                        <div style="flex:1; text-align:left;">${m.t2[0]}<br>${m.t2[1]}</div>
+                    </div>
+                `;
+            }).join('');
+            
+            // 自動捲動到當前比賽
+            setTimeout(() => {
+                const activeEl = document.querySelector('.schedule-item.active');
+                if (activeEl) activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 100);
+        }
 
-      function dfs(depth){
-        if(depth===M) return true;
-        const pivot = choosePivot();
-        const cand=[];
-        for(let mi=0; mi<all.length; mi++) if(!used[mi] && !wouldExceed(mi)) cand.push(mi);
-        const includesPivot = (mi)=> matchPlayersIdx[mi].includes(pivot);
-        const score = (mi)=>{
-          let s=0; const inMatch = new Array(N).fill(false);
-          for(const pi of matchPlayersIdx[mi]) inMatch[pi]=true;
-          for(let i=0;i<N;i++){
-            if(!inMatch[i]) s += (streak[i]>=3? 5 : 2);
-            else s -= (streak[i]>=3? 3 : 0);
-          }
-          if(!includesPivot(mi)) s += 8;
-          return s;
-        };
-        cand.sort((a,b)=> score(b)-score(a));
+        // --- 儲存功能 ---
+        function saveState() {
+            localStorage.setItem('badmintonState', JSON.stringify(state));
+        }
 
-        for(const mi of cand){
-          used[mi]=true;
-          const prev=streak.slice();
-          for(let i=0;i<N;i++) streak[i] = matchPlayersIdx[mi].includes(i) ? streak[i]+1 : 0;
-          order.push(mi);
-          if(dfs(depth+1)) return true;
-          order.pop();
-          for(let i=0;i<N;i++) streak[i]=prev[i];
-          used[mi]=false;
-        }
-        return false;
-      }
-
-      const ok = dfs(0);
-      if(!ok) return null;
-      return order.map(mi=>all[mi]);
-    }
-
-    // === (通用) 啟發式回溯演算法 (N=4, 或 N=6/7 完美解失敗時) ===
-    function generateSchedule(att, opts, timeBudgetMs){
-      const N=att.length; const M=chooseM(N); const target=(4*M)/N;
-      // N=5 走專用通道
-      if(N===5){ return generateScheduleN5(att); }
-
-      const plays=Object.fromEntries(att.map(n=>[n,0]));
-      const consec=Object.fromEntries(att.map(n=>[n,0]));
-      const rest=Object.fromEntries(att.map(n=>[n,0]));
-      const partnerCount={}; const recentPairs=[]; const global=new Set(); const sched=[];
-
-      function recompute(){
-        att.forEach(n=>{ plays[n]=0; consec[n]=0; rest[n]=0; });
-        for(const k in partnerCount) delete partnerCount[k];
-        recentPairs.length=0; global.clear();
-        for(const m of sched){
-          const players=[...m[0],...m[1]];
-          att.forEach(n=>{ const p=players.includes(n); plays[n]+=p?1:0; consec[n]=p?consec[n]+1:0; rest[n]=p?0:rest[n]+1; });
-          const p1=pairId(m[0]), p2=pairId(m[1]);
-          partnerCount[p1]=(partnerCount[p1]||0)+1; partnerCount[p2]=(partnerCount[p2]||0)+1;
-          if(opts.globalUnique) global.add(matchKey(m));
-          if(opts.noPartnerRepeat3) recentPairs.push([p1,p2]);
-        }
-      }
-      function canRest(name){ return !(opts.noDoubleRest && rest[name]>=1); }
-      function feasibleCountsAfterPick(pick){
-        for(const n of pick){ if(plays[n]+1>target) return false; }
-        const leftMatches=M - (sched.length+1); const leftSlots=leftMatches*4; let deficit=0;
-        att.forEach(n=>{ deficit += Math.max(0, target - (plays[n] + (pick.includes(n)?1:0))); });
-        return deficit<=leftSlots;
-      }
-      function partnerOk(pair){
-        const id=pairId(pair); const count=partnerCount[id]||0;
-        if(N===7 && M===21){ if(count>=2) return false; } // N=7 專用硬限制
-        else if(count>=opts.tmax){ return false; }
-        if(opts.noPartnerRepeat3){
-          for(let i=recentPairs.length-1,c=0;i>=0&&c<3;i--,c++){ const [a,b]=recentPairs[i]; if(a===id||b===id) return false; }
-        }
-        return true;
-      }
-
-      function next(deadline){
-        if(Date.now()>deadline) return false;
-        if(sched.length===M) return true;
-        const sorted=att.slice().sort((a,b)=>{ if(plays[a]!==plays[b]) return plays[a]-plays[b]; return rest[b]-rest[a]; });
-        const cand4=[];
-        function pick4(s,p){ if(p.length===4){ cand4.push(p.slice()); return; } for(let i=s;i<sorted.length;i++){ const name=sorted[i]; if(consec[name]>=opts.K) continue; p.push(name); pick4(i+1,p); p.pop(); } }
-        pick4(0,[]);
-        for(let i=cand4.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [cand4[i],cand4[j]]=[cand4[j],cand4[i]]; }
-        for(const four of cand4){
-          const set=new Set(four);
-          let okRest=true; for(const n of att){ if(!set.has(n) && !canRest(n)){ okRest=false; break; } }
-          if(!okRest) continue;
-          if(!feasibleCountsAfterPick(four)) continue;
-          const pairings=pairsOfFour(four);
-          for(let i=pairings.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [pairings[i],pairings[j]]=[pairings[j],pairings[i]]; }
-content           for(const pr of pairings){
-            const mk=matchKey(pr);
-            if(opts.globalUnique && (global.has(mk) || (sched.length && matchKey(sched[sched.length-1])===mk))) continue;
-            if(!partnerOk(pr[0])||!partnerOk(pr[1])) continue;
-            sched.push(pr); recompute(); if(next(deadline)) return true; sched.pop(); recompute();
-            if(Date.now()>deadline) return false;
-          }
-        }
-        return false;
-      }
-
-      const deadline = Date.now() + timeBudgetMs;
-      const ok = next(deadline);
-      return ok ? sched : null;
-    }
-
-    async function autoGenerate(attendees){
-      const N = attendees.length; if(N<4){ status('至少需要 4 人'); return; } if(N>8){ status('最多支援 8 人'); return; }
-      const M=chooseM(N);
-      status(`出席 ${N} 人，目標 ${M} 場…`);
-
-      // === NEW: N=6, 7, 8 (嘗試完美解) ===
-      if (N === 8 || N === 7 || N === 6) {
-          const K_Max = 2; // 連續出場 <= 2
-S         const targetPlays = (4*M)/N;
-          // 檢查是否能整除（N=7, M=21 -> 12場; N=6, M=18 -> 12場）
-          if (targetPlays % 1 !== 0) {
-              status(`N=${N}, M=${M} 無法完美均衡，退回通用演算法...`);
-              // 繼續往下
-          } else {
-              status(`N=${N}：嘗試完美解 (M=${M}, K=${K_Max}, 均衡=${targetPlays}場)`);
-              let result = null;
-              let tries = 0;
-              let errorMsg = '';
-              
-              // 增加嘗試次數，因為 DFS 是隨機的
-              while (!result && tries < 50) { 
-                  tries++;
-                  try { 
-                      // N=8, M=20, K=2, Target=10
-                      // N=7, M=21, K=2, Target=12
-                      // N=6, M=18, K=2, Target=12
-img                     result = findPerfectSchedule(attendees, M, K_Max); 
-                  }
-                  catch (e) { result = null; errorMsg = e.message; }
-                  
-                  if (!result) {
-                      if (tries % 10 === 0) status(`N=${N} 完美解搜尋中…第 ${tries} 次`);
-                      await new Promise(r=>setTimeout(r,0));
-                  }
-              }
-
-              if (result) {
-                  inputArea.value = result.map(m => `${m[0][0]} + ${m[0][1]} vs ${m[1][0]} + ${m[1][1]}`).join('\n');
-                  parse(); idx = 0; scores = {}; render(); save();
-                  status(`完成：N=${N}，${M} 場皆唯一、每人 ${targetPlays} 場、連續出場 ≤ 2`);
-                  return;
-              } else {
-                  // N=6, 7 如果找不到，退回通用演算法
-                  if (N === 6 || N === 7) {
-                      status(`N=${N}：未找到完美解(${errorMsg})，退回通用演算法...`);
-                      // 繼續往下執行
-                  } else {
-                      // N=8 找不到
-                      status(`N=8：未找到完美解(${errorMsg})，請重試。`);
-                      return;
-                  }
-              }
-          }
-      }
-      
-      // === N=5 (專用解) ===
-      if(N===5){
-        const result = generateSchedule(attendees, {}, 0); // 觸發 N=5 專用邏輯
-        if(result){
-          inputArea.value = result.map(m=>`${m[0][0]} + ${m[0][1]} vs ${m[1][0]} + ${m[1][1]}`).join('\n');
-file           parse(); idx=0; scores={}; render(); save();
-          status('完成：N=5，M=15（連續出場 ≤ 4）');
-          return;
-        }
-        status('N=5：仍未找到可行解，請稍後重試或更換人員。');
-        return;
-      }
-
-      // === N=4 (矛盾解) 或 N=6,7 退回 ===
-      // (保留原有的通用演算法，它會自動放寬 K=3 來處理 N=4)
-      const base = { K: 2, noDoubleRest: true, noPartnerRepeat3: true, noExactAdjacent: true, globalUnique: (N>=6), tmax: minFeasibleTmax(N) };
-      const steps = [];
-      for(let t=base.tmax; t<=10; t++) steps.push({ ...base, tmax:t });
-      for(let t=base.tmax; t<=10; t++) steps.push({ ...base, tmax:t, globalUnique:false });
-CSS     steps.push({ ...base, noPartnerRepeat3:false });
-      steps.push({ ...base, noPartnerRepeat3:false, noExactAdjacent:false });
-      steps.push({ ...base, noPartnerRepeat3:false, noExactAdjacent:false, K:3 }); // N=4 會用到 K=3
-      steps.push({ ...base, noPartnerRepeat3:false, noExactAdjacent:false, K:3, noDoubleRest:false });
-
-      let result=null, usedOpts=null;
-      for(const [i, st] of steps.entries()){
-        status(`嘗試設定 ${i+1}/${steps.length}…（t_max=${st.tmax}, K=${st.K}, 全局唯一=${st.globalUnique?'是':'否'}）`);
-img       for(let attempt=0; attempt<5 && !result; attempt++){
-          result = generateSchedule(attendees, st, 6000 + attempt*4000);
-          await new Promise(r=>setTimeout(r,0));
-        }
-        if(result){ usedOpts = st; break; }
-      }
-      if(!result){ status('仍未找到可行解；請調整出席名單或稍後再試。'); return; }
-
-      inputArea.value = result.map(m=>`${m[0][0]} + ${m[0][1]} vs ${m[1][0]} + ${m[1][1]}`).join('\n');
-      parse(); idx=0; scores={}; render(); save();
-      status(`完成：N=${N}, M=${M}, t_max=${usedOpts.tmax}, K=${usedOpts.K}（全局唯一=${usedOpts.globalUnique?'是':'否'}）`);
-    }
-
-    document.getElementById('autoGenBtn').onclick=()=>{ const att = getAttendees(); autoGenerate(att); };
-
-    // 快捷鍵
-    document.addEventListener('keydown',(e)=>{
-      if(e.key==='n'||e.key==='N'){ e.preventDefault(); document.getElementById('nextBtn').click(); }
-section       if(e.key==='p'||e.key==='P'){ e.preventDefault(); document.getElementById('prevBtn').click(); }
-      if(e.key==='r'||e.key==='R'){ e.preventDefault(); document.getElementById('resetBtn').click(); }
-      if(e.key===']'){ ensureScore(); scores[idx].r=Math.min(30,scores[idx].r+1); renderScores(); save(); }
-      if(e.key==='['){ ensureScore(); scores[idx].l=Math.min(30,scores[idx].l+1); renderScores(); save(); }
-      if(e.key==='}'){ ensureScore(); scores[idx].r=Math.max(0,scores[idx].r-1); renderScores(); save(); }
-      if(e.key==='{'){ ensureScore(); scores[idx].l=Math.max(0,scores[idx].l-1); renderScores(); save(); }
-    });
-
-    // ===== Dev Tests (run on load, non-intrusive) =====
-    (function devTests(){
-      try{
-        // 基本解析
-        const t1 = parseLine('A + B vs C + D');
-        console.assert(t1 && t1.left.join('&')==='A&B' && t1.right.join('&')==='C&D', 'parseLine 基本測試失敗');
-        // 不同分隔符 / 語系
-        const t2 = parseLine('A、B 對 C、D');
-        console.assert(t2 && t2.left.join('&')==='A&B' && t2.right.join('&')==='C&D', 'parseLine 語系/分隔符 測試失敗');
-        const t3 = parseLine('A ＋ B v. C ＋ D');
-        console.assert(t3 && t3.left.join('&')==='A&B' && t3.right.join('&')==='C&D', 'parseLine v. 測試失敗');
-
-        // N=8 完整列舉
-        const roster8 = ['A','B','C','D','E','F','G','H'];
-        const all8 = generateAllUniqueMatches(roster8); // MODIFIED
-        console.assert(all8.length===210, 'N=8 列舉數量應為 210');
-        const set8 = new Set(all8.map(m=>matchKey(m)));
-        console.assert(set8.size===210, 'N=8 應該全部唯一');
-
-        // N=8 完美取樣（20 場唯一 + 每人 10 場 + 連續 ≤ 2）
-        const sample = findPerfectSchedule(roster8, 20, 2); // MODIFIED
-        console.assert(sample.length===20, 'N=8 取樣長度應為 20');
-CSS       const uniq = new Set(sample.map(m=>matchKey(m))).size===sample.length;
-        console.assert(uniq, 'N=8 取樣應保持唯一對戰');
-        const cnts = Object.fromEntries(roster8.map(n=>[n,0]));
-        sample.forEach(m=>[...m[0],...m[1]].forEach(p=>cnts[p]++));
-        const ok10 = roster8.every(n=>cnts[n]===10);
-        console.assert(ok10, 'N=8 取樣每人次數應為 10');
-        // 連續出場 ≤ 2 測試
-        let okStreak=true; const streakTest=Object.fromEntries(roster8.map(n=>[n,0]));
-        for(const m of sample){
-          const players=[...m[0],...m[1]];
-          roster8.forEach(n=>{ streakTest[n] = players.includes(n) ? streakTest[n]+1 : 0; });
-CSS         if(roster8.some(n=>streakTest[n]>2)) { okStreak=false; break; }
-        }
-        console.assert(okStreak, 'N=8 連續出場次數應 ≤ 2');
-        // 相鄰四人組不可相同
-        let okAdj=true;
-        for(let i=1;i<sample.length;i++){
-          const a=[...sample[i-1][0],...sample[i-1][1]].sort().join('|');
-          const b=[...sample[i][0],...sample[i][1]].sort().join('|');
-          if(a===b){ okAdj=false; break; }
-        }
-        console.assert(okAdj, 'N=8 相鄰場次不可使用相同四人組合');
-SESSION       
-        // --- NEW TESTS ---
-        // N=6 完美取樣 (M=18, K=2, Target=12)
-        const roster6 = ['A','B','C','D','E','F'];
-        const all6 = generateAllUniqueMatches(roster6);
-        console.assert(all6.length===45, 'N=6 列舉數量應為 45');
-        try {
-            const sample6 = findPerfectSchedule(roster6, 18, 2);
-            console.assert(sample6.length===18, 'N=6 取樣長度應為 18');
-            const uniq6 = new Set(sample6.map(m=>matchKey(m))).size===sample6.length;
-            console.assert(uniq6, 'N=6 取樣應保持唯一對戰');
-            const cnts6 = Object.fromEntries(roster6.map(n=>[n,0]));
-            sample6.forEach(m=>[...m[0],...m[1]].forEach(p=>cnts6[p]++));
-            const ok12_6 = roster6.every(n=>cnts6[n]===12);
-            console.assert(ok12_6, 'N=6 取樣每人次數應為 12');
-img           // 連續出場 ≤ 2 測試
-            let okStreak6=true; const streakTest6=Object.fromEntries(roster6.map(n=>[n,0]));
-            for(const m of sample6){
-              const players=[...m[0],...m[1]];
-              roster6.forEach(n=>{ streakTest6[n] = players.includes(n) ? streakTest6[n]+1 : 0; });
-              if(roster6.some(n=>streakTest6[n]>2)) { okStreak6=false; break; }
-            }
-            console.assert(okStreak6, 'N=6 連續出場次數應 ≤ 2');
-CSS       } catch(e) { console.warn('N=6 完美解測試失敗（可能是隨機性導致本次未找到解）：', e.message); }
-        // --- END NEW TESTS ---
-
-        // N=5 產生器測試（15 場 + 每人 12 場 + 連續 ≤ 4）
-        const roster5 = ['P1','P2','P3','P4','P5'];
-        const gs5 = generateScheduleN5(roster5);
-        console.assert(gs5 && gs5.length===15, 'N=5 產生器應回傳 15 場');
-        const cnt5=Object.fromEntries(roster5.map(n=>[n,0]));
-        const idx5=new Map(roster5.map((n,i)=>[n,i]));
-        const streak5=new Array(roster5.length).fill(0);
-        let okCnt5=true, okStreak5=true;
-        for(const m of gs5){
-          const players=[...m[0],...m[1]];
-D         roster5.forEach(n=>{ const i=idx5.get(n); if(players.includes(n)){ cnt5[n]++; streak5[i]++; if(streak5[i]>4) okStreak5=false; } else { streak5[i]=0; } });
-        }
-        if(!roster5.every(n=>cnt5[n]===12)) okCnt5=false;
-        console.assert(okCnt5, 'N=5 每人出場應為 12');
-  D     console.assert(okStreak5, 'N=5 連續出場應 ≤ 4');
-        // N=5 唯一性：15 場都不同（完整對戰類型不重複）
-        const uniq5 = new Set(gs5.map(m=>matchKey(m))).size===15;
-        console.assert(uniq5, 'N=5 應該是 15 種唯一完整對戰');
-
-        // 組合切分函式
-        const pf = pairsOfFour(['a','b','c','d']);
-CSS       console.assert(pf.length===3, 'pairsOfFour 應回傳 3 種配對');
-
-        // chooseM / minFeasibleTmax
-        console.assert(chooseM(8)===20 && chooseM(7)===21 && chooseM(6)===18 && chooseM(5)===15 && chooseM(4)===12, 'chooseM 值錯誤');
-        console.assert(minFeasibleTmax(8)===2, 'N=8 tmax 應為 2');
-        // N=7, M=21 -> C(7,2)=21 -> avg = 42/21 = 2 -> minTmax=2
-        console.assert(minFeasibleTmax(7)===2, 'N=7 tmax 應為 2'); 
-        // N=6, M=18 -> C(6,2)=15 -> avg = 36/15 = 2.4 -> minTmax=3
-        console.assert(minFeasibleTmax(6)===3, 'N=6 tmax 應為 3');
-
-        console.log('%cDevTests passed','color:#8affcc');
-      }catch(err){ console.warn('DevTests warn:', err); }
-    })();
-
-    // 初始渲染
-    renderRoster();
-    load();
-    status('就緒');
-  </script>
+        function loadState() {
+            const saved = localStorage.getItem('badmintonState');
+            if (saved) {
+                state = JSON.parse(saved);
+            }
+        }
+    </script>
 </body>
 </html>
