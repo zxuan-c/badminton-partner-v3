@@ -56,6 +56,90 @@
         }
         button:active { transform: scale(0.96); opacity: 0.9; }
 
+        /* --- 全螢幕計分模式 (新增) --- */
+        #fs-overlay {
+            display: none; /* 預設隱藏 */
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            z-index: 2000;
+            flex-direction: column;
+            color: white;
+        }
+        #fs-overlay.show { display: flex; }
+
+        .fs-close-btn {
+            position: absolute;
+            top: 15px; right: 15px;
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            color: rgba(255,255,255,0.8);
+            font-size: 1.2rem;
+            display: flex; align-items: center; justify-content: center;
+            z-index: 2001;
+        }
+
+        .fs-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 10px;
+        }
+
+        .fs-team {
+            flex: 1;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .fs-names {
+            font-size: clamp(1.5rem, 4vw, 3rem);
+            color: #ccc;
+            text-align: center;
+            margin-bottom: 2vh;
+            font-weight: bold;
+            line-height: 1.3;
+        }
+
+        .fs-score {
+            font-size: 30vw; /* 超大字體 */
+            font-weight: 800;
+            color: var(--accent);
+            line-height: 1;
+            margin-bottom: 3vh;
+            font-variant-numeric: tabular-nums;
+            cursor: pointer;
+        }
+
+        .fs-controls {
+            display: flex;
+            gap: 20px;
+        }
+
+        .fs-btn {
+            width: 12vw; height: 12vw;
+            max-width: 80px; max-height: 80px;
+            min-width: 50px; min-height: 50px;
+            border-radius: 50%;
+            font-size: 1.5rem;
+            display: flex; align-items: center; justify-content: center;
+            color: white;
+        }
+        .fs-btn.minus { background: var(--danger); opacity: 0.8; }
+        .fs-btn.plus { background: var(--accent); }
+
+        .fs-divider {
+            width: 1px;
+            height: 60%;
+            background: #333;
+            margin: 0 5px;
+        }
+
         /* --- 自訂彈跳視窗 (Modal) --- */
         .modal-overlay {
             display: none;
@@ -197,6 +281,7 @@
             justify-content: center;
             align-items: center;
             gap: 10px;
+            flex-wrap: wrap;
         }
 
         .target-score-badge {
@@ -360,6 +445,34 @@
 </head>
 <body>
 
+    <!-- 全螢幕計分模式 (新增) -->
+    <div id="fs-overlay">
+        <button class="fs-close-btn" onclick="closeFullscreen()">✕</button>
+        <div class="fs-container">
+            <!-- Team 1 -->
+            <div class="fs-team">
+                <div class="fs-names" id="fs-t1-names"></div>
+                <div class="fs-score" id="fs-t1-score" onclick="updateScore(1, 1)">0</div>
+                <div class="fs-controls">
+                    <button class="fs-btn minus" onclick="updateScore(1, -1)">-</button>
+                    <button class="fs-btn plus" onclick="updateScore(1, 1)">+</button>
+                </div>
+            </div>
+            
+            <div class="fs-divider"></div>
+
+            <!-- Team 2 -->
+            <div class="fs-team">
+                <div class="fs-names" id="fs-t2-names"></div>
+                <div class="fs-score" id="fs-t2-score" onclick="updateScore(2, 1)">0</div>
+                <div class="fs-controls">
+                    <button class="fs-btn minus" onclick="updateScore(2, -1)">-</button>
+                    <button class="fs-btn plus" onclick="updateScore(2, 1)">+</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 彈跳視窗 -->
     <div id="custom-modal" class="modal-overlay">
         <div class="modal-card">
@@ -430,6 +543,7 @@
                 第 <span id="match-id" style="font-weight:bold; color:var(--primary);">1</span> 場
                 <span id="target-score-display" class="target-score-badge">21分制</span>
                 <span id="room-display-app" class="room-badge" style="margin-left:5px;"></span>
+                <button class="btn-outline" style="margin-left:auto; padding:5px 10px;" onclick="openFullscreen()">⛶ 全螢幕</button>
             </div>
 
             <div class="scores-display">
@@ -762,10 +876,17 @@
             document.getElementById('match-id').innerText = m.id;
             document.getElementById('target-score-display').innerText = `${target}分制`;
             
+            // 一般介面
             document.getElementById('t1-names').innerText = `${m.t1[0]} / ${m.t1[1]}`;
             document.getElementById('t2-names').innerText = `${m.t2[0]} / ${m.t2[1]}`;
             document.getElementById('t1-score').innerText = m.s1;
             document.getElementById('t2-score').innerText = m.s2;
+
+            // 全螢幕介面同步更新
+            document.getElementById('fs-t1-names').innerText = `${m.t1[0]} / ${m.t1[1]}`;
+            document.getElementById('fs-t2-names').innerText = `${m.t2[0]} / ${m.t2[1]}`;
+            document.getElementById('fs-t1-score').innerText = m.s1;
+            document.getElementById('fs-t2-score').innerText = m.s2;
         }
 
         function updateScore(team, delta) {
@@ -835,6 +956,23 @@
                 const el = document.querySelector('.match-card.active');
                 if(el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }, 100);
+        }
+
+        // --- 全螢幕功能 ---
+        function openFullscreen() {
+            document.getElementById('fs-overlay').classList.add('show');
+            // 嘗試請求瀏覽器全螢幕 (手機體驗更佳)
+            const elem = document.documentElement;
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen().catch(err => {});
+            }
+        }
+
+        function closeFullscreen() {
+            document.getElementById('fs-overlay').classList.remove('show');
+            if (document.exitFullscreen) {
+                document.exitFullscreen().catch(err => {});
+            }
         }
 
         // --- Modal ---
