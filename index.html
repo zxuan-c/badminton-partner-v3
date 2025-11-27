@@ -471,8 +471,8 @@
 
     <script>
         // --- 設定 (請填入您的 Supabase 資訊) ---
-        const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // 替換成您的 Project URL
-        const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY'; // 替換成您的 Anon Key
+        const SUPABASE_URL = 'https://dgdolkbubvyggijsddtl.supabase.co'; // 替換成您的 Project URL
+        const SUPABASE_KEY = 'sb_publishable_-tIVFIoo0VXjtrWrKadCgw__QO8IAbW'; // 替換成您的 Anon Key
 
         // --- Init ---
         let supabase;
@@ -493,15 +493,15 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             // 初始化 Supabase
-            if (typeof createClient === 'undefined') {
+            if (typeof window.supabase === 'undefined' || typeof window.supabase.createClient === 'undefined') {
                 console.error("Supabase SDK not loaded");
-                alert("Supabase SDK 載入失敗，請檢查網路");
+                alert("Supabase SDK 載入失敗，請檢查網路或 CDN 狀態");
                 return;
             }
 
             try {
                 // 檢查是否已填寫 KEY
-                if(SUPABASE_URL === 'https://dgdolkbubvyggijsddtl.supabase.co' || SUPABASE_KEY === 'sb_publishable_-tIVFIoo0VXjtrWrKadCgw__QO8IAbW') {
+                if(SUPABASE_URL === 'YOUR_SUPABASE_URL' || SUPABASE_KEY === 'YOUR_SUPABASE_ANON_KEY') {
                     showModal("設定未完成", "請編輯 index.html，填入您的 Supabase URL 和 Key", ()=>{});
                 }
                 
