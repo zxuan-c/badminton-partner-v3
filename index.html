@@ -2,8 +2,18 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>羽球雙打排程與計分</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <!-- PWA / Mobile Web App 設定 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#2c3e50">
+    <title>羽球排程</title>
+    
+    <!-- iOS Icon (可選，若無會顯示網頁截圖) -->
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1165/1165187.png">
+
     <style>
         /* --- 基礎設定 --- */
         :root {
@@ -29,6 +39,9 @@
             flex-direction: column;
             color: var(--text);
             overflow: hidden;
+            /* 避免 iOS上方劉海遮擋 */
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
         }
 
         button {
@@ -362,8 +375,8 @@
             <div class="modal-title" id="modal-title">標題</div>
             <div class="modal-msg" id="modal-msg">內容</div>
             <div class="modal-actions">
-                <button class="modal-btn btn-cancel" onclick="closeModal()">取消 (繼續打)</button>
-                <button class="modal-btn btn-confirm" id="modal-confirm-btn">確定下一場</button>
+                <button class="modal-btn btn-cancel" onclick="closeModal()">取消</button>
+                <button class="modal-btn btn-confirm" id="modal-confirm-btn">確定</button>
             </div>
         </div>
     </div>
@@ -454,7 +467,7 @@
             <div class="schedule-header">
                 <span>賽程表</span>
                 <div>
-                    <!-- 修改這裡：將 backToSetup 改為 clearData，並加上紅色樣式提醒 -->
+                    <!-- 紅色重置按鈕 -->
                     <button class="btn-outline" onclick="clearData()" style="color: var(--danger); border-color: var(--danger);">全部重置</button>
                     <button class="btn-outline" onclick="addMoreMatches()">+ 產生</button>
                 </div>
@@ -495,16 +508,15 @@
             }
         });
 
-        // --- 彈窗系統 (核心修復) ---
+        // --- 彈窗系統 ---
         function showModal(title, msg, confirmCallback) {
-            if(isModalOpen) return; // 防止重複跳窗
+            if(isModalOpen) return;
             isModalOpen = true;
             
             document.getElementById('modal-title').innerText = title;
-            document.getElementById('modal-msg').innerHTML = msg; // 允許 HTML (換行)
+            document.getElementById('modal-msg').innerHTML = msg;
             
             const confirmBtn = document.getElementById('modal-confirm-btn');
-            // 移除舊的 event listener 避免疊加，最簡單是用 cloneNode
             const newBtn = confirmBtn.cloneNode(true);
             confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
             
@@ -518,7 +530,6 @@
 
         function closeModal() {
             document.getElementById('custom-modal').classList.remove('show');
-            // 延遲一下再釋放鎖，避免誤觸
             setTimeout(() => { isModalOpen = false; }, 300);
         }
 
@@ -635,7 +646,6 @@
             document.getElementById('setup-page').style.display = 'none';
             document.getElementById('app-page').style.display = 'flex';
             
-            // 尋找下一場
             let idx = state.schedule.findIndex(m => m.status !== 'finished');
             if(idx === -1) {
                 generateMatches(5);
@@ -657,7 +667,7 @@
             document.getElementById('match-id').innerText = m.id;
             document.getElementById('target-score-display').innerText = `${target}分制`;
 
-            // 修改這裡：用斜線分隔並在同一行顯示
+            // 單行斜線顯示
             document.getElementById('t1-names').innerText = `${m.t1[0]} / ${m.t1[1]}`;
             document.getElementById('t2-names').innerText = `${m.t2[0]} / ${m.t2[1]}`;
             
@@ -666,7 +676,6 @@
         }
 
         function updateScore(team, delta) {
-            // 如果 Modal 開著，不允許加分，防止混亂
             if (isModalOpen) return;
 
             const currentIdx = state.currentIdx;
@@ -681,20 +690,21 @@
             saveData();
             renderSchedule(); 
 
-            // 自動判定
+            // 自動判定 (含 Deuce 規則)
             const target = state.targetScore || 21;
-            if ((m.s1 >= target || m.s2 >= target) && m.status !== 'finished') {
-                // 達到分數，直接結束換下一場 (不需確認)
+            const currentMaxScore = Math.max(m.s1, m.s2);
+            const scoreDiff = Math.abs(m.s1 - m.s2);
+
+            // 達到分數 且 分差 >= 2 (Deuce) 則直接結束
+            if (currentMaxScore >= target && scoreDiff >= 2 && m.status !== 'finished') {
                 finishMatch(currentIdx);
             }
         }
 
-        // 手動點擊按鈕
         function manualFinishClick() {
             const m = state.schedule[state.currentIdx];
             if (!m || m.status === 'finished') return;
-            
-            // 手動點擊，直接結束換下一場 (不需確認)
+            // 手動直接結束
             finishMatch(state.currentIdx);
         }
 
@@ -704,7 +714,7 @@
 
             m.status = 'finished';
             saveData();
-            showApp(); // 重新載入以顯示下一場
+            showApp(); 
         }
 
         function renderSchedule() {
@@ -716,7 +726,6 @@
                 const scoreText = m.status === 'pending' ? 'vs' : `${m.s1}:${m.s2}`;
                 const scoreStyle = m.status === 'pending' ? 'color:#ccc' : 'color:#333';
                 
-                // 修改這裡：列表中的名字也改成用斜線分隔
                 return `
                     <div class="match-card ${activeClass} ${finishedClass}" id="match-${i}">
                         <div style="width:30px; color:#999; font-size:0.9rem;">${m.id}</div>
@@ -739,31 +748,21 @@
         }
 
         function backToSetup() {
-            // 用我們的新 Modal
-            showModal("返回設定", "這可能會打亂目前的排程順序，確定要回去嗎？", () => {
-                document.getElementById('app-page').style.display = 'none';
-                document.getElementById('setup-page').style.display = 'flex';
-                updateModeUI();
-            });
+            // 這個現在沒用到，因為已經改成直接全部重置
         }
 
         function clearData() {
             showModal("警告", "這會刪除所有名單和對戰紀錄，確定重來？", () => {
-                // 1. 清除 LocalStorage
+                // 清除並回到設定頁，不重新整理
                 localStorage.removeItem('badminton_v3');
-                
-                // 2. 重置所有變數回預設值
                 state = JSON.parse(JSON.stringify(DEFAULT_STATE));
                 
-                // 3. 視覺上切換回設定頁面
                 document.getElementById('app-page').style.display = 'none';
                 document.getElementById('setup-page').style.display = 'flex';
                 
-                // 4. 清空介面上的資料
                 document.getElementById('input-name').value = '';
                 document.getElementById('schedule-container').innerHTML = '';
                 
-                // 5. 重繪設定頁 (名單會變空、分數重置)
                 renderPlayers();
                 updateModeUI();
             });
