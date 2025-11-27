@@ -16,11 +16,11 @@
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
         import { getFirestore, doc, onSnapshot, setDoc, collection } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
         // 全域變數供下方 Script 使用
-        window.firebaseModules = { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, getFirestore, doc, onSnapshot, setDoc, collection };
+        window.firebaseModules = { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, getFirestore, doc, onSnapshot, setDoc, collection };
     </script>
 
     <style>
@@ -502,7 +502,7 @@
         // --- 初始化 ---
         document.addEventListener('DOMContentLoaded', async () => {
             // Firebase Setup
-            const { initializeApp, getAuth, signInAnonymously, getFirestore } = window.firebaseModules;
+            const { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, getFirestore } = window.firebaseModules;
             const app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
@@ -512,9 +512,7 @@
             
             // 優先使用 token，否則匿名
             if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                 const { signInWithCustomToken } = window.firebaseModules; // Dynamic import if needed or assume available
-                 // Actually signInAnonymously is safer for generic demo without backend token gen
-                 await signInAnonymously(auth);
+                 await signInWithCustomToken(auth, __initial_auth_token);
             } else {
                  await signInAnonymously(auth);
             }
@@ -578,9 +576,9 @@
                 showModal("錯誤", "連線失敗，請重試", ()=>{});
             });
 
-            // 更新網址方便分享
-            const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?room=' + roomId;
-            window.history.pushState({path:newUrl},'',newUrl);
+            // 更新網址方便分享 - 移除 pushState 以修復 SecurityError
+            // const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?room=' + roomId;
+            // window.history.pushState({path:newUrl},'',newUrl);
             
             // 顯示房間標籤
             document.getElementById('room-display-setup').innerText = roomId;
@@ -594,7 +592,7 @@
             document.getElementById('app-page').style.display = 'none';
             document.getElementById('setup-page').style.display = 'none';
             document.getElementById('room-page').style.display = 'flex';
-            window.history.pushState({}, document.title, window.location.pathname);
+            // window.history.pushState({}, document.title, window.location.pathname);
         }
 
         async function saveData(force = false) {
