@@ -9,19 +9,12 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#2c3e50">
-    <title>羽球排程 (連線版)</title>
+    <title>羽球排程 (Supabase版)</title>
     
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1165/1165187.png">
 
-    <!-- Firebase SDK -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-        import { getFirestore, doc, onSnapshot, setDoc, collection } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
-
-        // 全域變數供下方 Script 使用
-        window.firebaseModules = { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, getFirestore, doc, onSnapshot, setDoc, collection };
-    </script>
+    <!-- Supabase SDK (CDN) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <style>
         /* --- 基礎設定 --- */
@@ -387,7 +380,7 @@
             
             <input type="text" id="room-id-input" placeholder="例如: team_friday" style="text-align:center; font-size:1.2rem; font-weight:bold;">
             <button class="btn-green" style="width:100%; padding:15px; font-size:1.1rem;" onclick="joinRoom()">進入房間</button>
-            <div id="loading-text" class="loading" style="display:none;">正在連線資料庫...</div>
+            <div id="loading-text" class="loading" style="display:none;">正在連線 Supabase...</div>
         </div>
     </div>
 
@@ -477,14 +470,14 @@
     </div>
 
     <script>
-        // --- Firebase Init ---
-        let db, auth, docRef;
-        let unsubscribe = null;
-        let currentRoomId = "";
+        // --- 設定 (請填入您的 Supabase 資訊) ---
+        const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // 替換成您的 Project URL
+        const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY'; // 替換成您的 Anon Key
 
-        // 環境變數
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default';
+        // --- Init ---
+        let supabase;
+        let realtimeChannel = null;
+        let currentRoomId = "";
 
         // --- App State ---
         const DEFAULT_STATE = {
@@ -497,29 +490,28 @@
         let state = JSON.parse(JSON.stringify(DEFAULT_STATE));
         let tempTargetScore = 21;
         let isModalOpen = false;
-        let isSaving = false; // 防止連續寫入
 
-        // --- 初始化 ---
-        document.addEventListener('DOMContentLoaded', async () => {
-            // Firebase Setup
-            const { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, getFirestore } = window.firebaseModules;
-            const app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
-
-            // 檢查是否已登入
-            document.getElementById('loading-text').style.display = 'block';
-            
-            // 優先使用 token，否則匿名
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                 await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-                 await signInAnonymously(auth);
+        document.addEventListener('DOMContentLoaded', () => {
+            // 初始化 Supabase
+            if (typeof createClient === 'undefined') {
+                console.error("Supabase SDK not loaded");
+                alert("Supabase SDK 載入失敗，請檢查網路");
+                return;
             }
-            
-            document.getElementById('loading-text').style.display = 'none';
 
-            // 檢查網址是否有 ?room=xxx，如果有直接進入
+            try {
+                // 檢查是否已填寫 KEY
+                if(SUPABASE_URL === 'https://dgdolkbubvyggijsddtl.supabase.co' || SUPABASE_KEY === 'sb_publishable_-tIVFIoo0VXjtrWrKadCgw__QO8IAbW') {
+                    showModal("設定未完成", "請編輯 index.html，填入您的 Supabase URL 和 Key", ()=>{});
+                }
+                
+                // @ts-ignore
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            } catch (e) {
+                console.error(e);
+            }
+
+            // 檢查網址參數
             const urlParams = new URLSearchParams(window.location.search);
             const roomParam = urlParams.get('room');
             if(roomParam) {
@@ -527,7 +519,7 @@
                 joinRoom();
             }
 
-            // 綁定輸入框 Enter
+            // 綁定按鍵
             document.getElementById('input-name').addEventListener('keypress', (e) => {
                 if(e.key === 'Enter') addPlayer();
             });
@@ -536,82 +528,115 @@
             });
         });
 
-        // --- 房間系統 ---
+        // --- 房間與連線邏輯 ---
         async function joinRoom() {
             const input = document.getElementById('room-id-input');
             const roomId = input.value.trim();
             if(!roomId) { showModal("提示", "請輸入房間代碼", ()=>{}); return; }
 
             currentRoomId = roomId;
-            const { doc, onSnapshot, collection } = window.firebaseModules;
-            
-            // 路徑: /artifacts/{appId}/public/data/badminton_rooms/{roomId}
-            const roomsCol = collection(db, 'artifacts', appId, 'public', 'data', 'badminton_rooms');
-            docRef = doc(roomsCol, roomId);
-
-            document.getElementById('loading-text').innerText = "連線中...";
             document.getElementById('loading-text').style.display = 'block';
 
-            // 監聽資料庫變化
-            if(unsubscribe) unsubscribe();
-            unsubscribe = onSnapshot(docRef, (docSnap) => {
-                document.getElementById('loading-text').style.display = 'none';
-                if (docSnap.exists()) {
-                    state = docSnap.data();
-                    // 同步到 UI
-                    syncUI();
-                } else {
-                    // 新房間，寫入預設值
-                    saveData(true); 
-                    syncUI();
-                }
-                // 切換頁面
-                if(state.schedule.length > 0) {
-                    showAppPage();
-                } else {
-                    showSetupPage();
-                }
-            }, (error) => {
-                console.error("Sync error:", error);
-                showModal("錯誤", "連線失敗，請重試", ()=>{});
-            });
+            // 1. 讀取初始資料
+            const { data, error } = await supabase
+                .from('rooms')
+                .select('data')
+                .eq('id', roomId)
+                .single();
 
-            // 更新網址方便分享 - 移除 pushState 以修復 SecurityError
-            // const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?room=' + roomId;
-            // window.history.pushState({path:newUrl},'',newUrl);
+            if (error && error.code !== 'PGRST116') { // PGRST116 = 找不到資料(正常)
+                console.error("Fetch error:", error);
+                // showModal("錯誤", "連線失敗: " + error.message, ()=>{});
+                // 繼續嘗試，也許是新建房間
+            }
+
+            if (data && data.data) {
+                state = data.data;
+            } else {
+                // 新房間，寫入預設值
+                await saveData(); 
+            }
             
-            // 顯示房間標籤
+            // 2. 訂閱即時更新
+            if(realtimeChannel) await supabase.removeChannel(realtimeChannel);
+            
+            realtimeChannel = supabase
+                .channel('room-updates')
+                .on(
+                    'postgres_changes',
+                    {
+                        event: '*', // Listen to all events (INSERT, UPDATE)
+                        schema: 'public',
+                        table: 'rooms',
+                        filter: `id=eq.${roomId}`
+                    },
+                    (payload) => {
+                        // 當資料庫有變動時
+                        if(payload.new && payload.new.data) {
+                            // 簡單防呆：避免本地寫入時重複刷新 (雖然 Supabase 會回傳)
+                            // 這裡直接同步
+                            state = payload.new.data;
+                            syncUI();
+                        }
+                    }
+                )
+                .subscribe();
+
+            document.getElementById('loading-text').style.display = 'none';
+            syncUI();
+            
+            // 顯示正確頁面
+            if(state.schedule.length > 0) {
+                showAppPage();
+            } else {
+                showSetupPage();
+            }
+
+            // 更新 UI 標籤
             document.getElementById('room-display-setup').innerText = roomId;
             document.getElementById('room-display-app').innerText = roomId;
+            
+            // 嘗試更新網址 (若環境允許)
+            try {
+                const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?room=' + roomId;
+                window.history.replaceState({path:newUrl},'',newUrl);
+            } catch(e){}
+        }
+
+        async function saveData() {
+            if(!currentRoomId || !supabase) return;
+            
+            const { error } = await supabase
+                .from('rooms')
+                .upsert({ id: currentRoomId, data: state });
+                
+            if(error) console.error("Save error:", error);
         }
 
         function exitRoom() {
-            if(unsubscribe) unsubscribe();
+            if(realtimeChannel) supabase.removeChannel(realtimeChannel);
+            realtimeChannel = null;
             state = JSON.parse(JSON.stringify(DEFAULT_STATE));
             currentRoomId = "";
             document.getElementById('app-page').style.display = 'none';
             document.getElementById('setup-page').style.display = 'none';
             document.getElementById('room-page').style.display = 'flex';
-            // window.history.pushState({}, document.title, window.location.pathname);
         }
 
-        async function saveData(force = false) {
-            if(!currentRoomId) return;
-            // 簡單的防抖動或鎖定，這裡直接寫入
-            const { setDoc } = window.firebaseModules;
-            try {
-                await setDoc(docRef, state);
-            } catch(e) {
-                console.error("Save failed", e);
-            }
-        }
-
+        // --- 同步 UI ---
         function syncUI() {
             renderPlayers();
             updateModeUI();
             if(state.schedule.length > 0) {
                 updateScoreUI();
                 renderSchedule();
+                
+                // 如果在 App 頁面且有新賽程，確保 Index 正確
+                // (例如別人在設定頁加了人並開始)
+                const isAppVisible = document.getElementById('app-page').style.display === 'flex';
+                if(!isAppVisible && state.schedule.length > 0) {
+                    showAppPage();
+                }
             }
         }
 
@@ -627,18 +652,13 @@
             document.getElementById('setup-page').style.display = 'none';
             document.getElementById('app-page').style.display = 'flex';
             
-            // 檢查當前場次
+            // 找出正在進行的場次
             let idx = state.schedule.findIndex(m => m.status !== 'finished');
-            if(idx === -1 && state.schedule.length > 0) {
-                 // 全打完了
-                 idx = state.schedule.length - 1;
-            } else if (idx === -1) {
-                 // 沒賽程
-                 showSetupPage();
-                 return;
-            }
+            if(idx === -1 && state.schedule.length > 0) idx = state.schedule.length - 1;
+            else if(idx === -1) { showSetupPage(); return; }
+            
             state.currentIdx = idx;
-            // 確保本地狀態更新後，如果是 pending 轉 active，這需要寫入 DB
+            // 觸發狀態更新 (如果是 pending -> active)
             if(state.schedule[idx] && state.schedule[idx].status === 'pending') {
                 state.schedule[idx].status = 'active';
                 saveData();
@@ -648,17 +668,14 @@
         }
 
         // --- 業務邏輯 ---
-
         function selectMode(score, element) {
             tempTargetScore = score;
-            // 本地 UI 立即反應，不寫入 DB，等按下開始才寫入
             document.querySelectorAll('.mode-label').forEach(el => el.classList.remove('selected'));
             element.classList.add('selected');
         }
 
         function updateModeUI() {
             const currentScore = state.targetScore || 21;
-            // 如果在設定頁，顯示 state 的值
             const radios = document.getElementsByName('mode');
             radios.forEach(r => {
                 if(parseInt(r.value) === currentScore) {
@@ -695,15 +712,12 @@
         }
 
         function removePlayer(idx) {
-            // 在多人模式下，刪除需謹慎，這裡直接刪
             state.players.splice(idx, 1);
             saveData();
         }
 
         function startSystem() {
             if(state.players.length < 4) { showModal("提示","至少需要4人",()=>{}); return; }
-            
-            // 應用設定
             state.targetScore = tempTargetScore;
             
             if(state.schedule.length === 0) {
@@ -719,17 +733,14 @@
             const startId = state.schedule.length + 1;
             for(let i=0; i<count; i++) {
                 let pool = [...state.players];
-                // 簡單排序: 場次少 > 隨機
                 pool.sort((a, b) => (a.played - b.played) || (Math.random() - 0.5));
                 const picked = pool.slice(0, 4);
                 
-                // 更新上場數
                 picked.forEach(p => {
                     const realP = state.players.find(x => x.name === p.name);
                     if(realP) realP.played++;
                 });
 
-                // 簡單分組
                 const t1 = [picked[0], picked[1]];
                 const t2 = [picked[2], picked[3]];
 
@@ -765,16 +776,14 @@
             if(team === 1) m.s1 = Math.max(0, m.s1 + delta);
             else m.s2 = Math.max(0, m.s2 + delta);
 
-            // 檢查 Deuce 規則
             const target = state.targetScore || 21;
             const maxS = Math.max(m.s1, m.s2);
             const diff = Math.abs(m.s1 - m.s2);
 
             if(maxS >= target && diff >= 2) {
-                // 結束比賽
                 finishMatch(state.currentIdx);
             } else {
-                saveData(); // 僅更新分數
+                saveData();
             }
         }
 
@@ -788,7 +797,6 @@
             if(state.schedule[idx]) {
                 state.schedule[idx].status = 'finished';
                 saveData();
-                // 觸發 saveData 後，onSnapshot 會回來呼叫 showAppPage() 更新 UI
             }
         }
 
@@ -799,7 +807,7 @@
         function clearData() {
             showModal("警告", "這會清除此房間所有資料，確定？", () => {
                 state = JSON.parse(JSON.stringify(DEFAULT_STATE));
-                state.targetScore = tempTargetScore; // 保留賽制設定
+                state.targetScore = tempTargetScore;
                 saveData();
                 showSetupPage();
             });
@@ -845,7 +853,6 @@
             document.getElementById('custom-modal').classList.remove('show');
             setTimeout(() => { isModalOpen = false; }, 300);
         }
-
     </script>
 </body>
 </html>
