@@ -9,10 +9,19 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#2c3e50">
-    <title>羽球排程</title>
+    <title>羽球排程 (連線版)</title>
     
-    <!-- iOS Icon (可選，若無會顯示網頁截圖) -->
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1165/1165187.png">
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, setDoc, collection } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+
+        // 全域變數供下方 Script 使用
+        window.firebaseModules = { initializeApp, getAuth, signInAnonymously, onAuthStateChanged, getFirestore, doc, onSnapshot, setDoc, collection };
+    </script>
 
     <style>
         /* --- 基礎設定 --- */
@@ -34,12 +43,11 @@
             margin: 0;
             padding: 0;
             height: 100vh;
-            height: 100dvh; /* 手機瀏覽器優化 */
+            height: 100dvh;
             display: flex;
             flex-direction: column;
             color: var(--text);
             overflow: hidden;
-            /* 避免 iOS上方劉海遮擋 */
             padding-top: env(safe-area-inset-top);
             padding-bottom: env(safe-area-inset-bottom);
         }
@@ -57,7 +65,7 @@
 
         /* --- 自訂彈跳視窗 (Modal) --- */
         .modal-overlay {
-            display: none; /* 預設隱藏 */
+            display: none;
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
             background: var(--modal-bg);
@@ -81,7 +89,6 @@
 
         .modal-title { font-size: 1.4rem; font-weight: 900; color: var(--primary); margin-bottom: 10px; }
         .modal-msg { font-size: 1rem; color: #555; margin-bottom: 20px; line-height: 1.5; }
-        
         .modal-actions { display: flex; gap: 10px; }
         .modal-btn { flex: 1; padding: 12px; border-radius: 10px; font-size: 1rem; }
         .btn-cancel { background: #eee; color: #666; }
@@ -90,8 +97,7 @@
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
-
-        /* --- 設定頁面 --- */
+        /* --- 頁面容器 --- */
         .page {
             flex: 1;
             display: flex;
@@ -103,12 +109,15 @@
             height: 100%;
         }
 
-        #setup-page {
+        /* --- 登入/房間頁面 --- */
+        #room-page {
             display: flex;
             justify-content: center;
-            align-items: flex-start;
-            overflow-y: auto;
+            align-items: center;
         }
+
+        /* --- 設定頁面 --- */
+        #setup-page { display: none; overflow-y: auto; }
         
         .setup-card {
             background: var(--card);
@@ -123,6 +132,7 @@
             width: 100%; padding: 12px; font-size: 1rem;
             border: 2px solid #ddd; border-radius: 8px;
             margin-bottom: 10px;
+            -webkit-appearance: none;
         }
         
         .player-tag {
@@ -136,7 +146,6 @@
         }
         .player-tag span { color: #999; margin-left: 8px; cursor: pointer; font-size: 1.2rem; }
 
-        /* 賽制選擇 Radio Button */
         .mode-selector {
             display: flex;
             gap: 10px;
@@ -153,7 +162,6 @@
             border: 2px solid transparent;
             transition: all 0.2s;
         }
-        .mode-label input { display: none; }
         .mode-label.selected {
             background: #e8f5e9;
             border-color: var(--accent);
@@ -161,24 +169,23 @@
             font-weight: bold;
         }
 
-        /* --- 主應用頁面佈局 --- */
+        /* --- 主應用頁面 --- */
         #app-page {
             display: none;
             flex-direction: column;
-            padding: 0; /* 滿版設計 */
+            padding: 0;
             max-width: 100%;
             height: 100%;
             background: #222;
         }
 
-        /* 上半部：計分板 (佔據所有剩餘空間) */
         .scoreboard-section {
-            flex: 1; /* 自動填滿空間 */
+            flex: 1;
             background: var(--card);
             border-radius: 0 0 30px 30px;
             display: flex;
             flex-direction: column;
-            justify-content: space-evenly; /* 內容垂直均分 */
+            justify-content: space-evenly;
             padding: 15px;
             position: relative;
             z-index: 10;
@@ -206,8 +213,15 @@
             padding: 2px 8px;
             border-radius: 4px;
         }
+        
+        .room-badge {
+            background: #e3f2fd;
+            color: #1565c0;
+            font-size: 0.8rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
 
-        /* 比分核心區域 */
         .scores-display {
             display: flex;
             align-items: center;
@@ -225,7 +239,6 @@
             height: 100%;
         }
 
-        /* 選手名字 */
         .team-names {
             font-size: 1.5rem; 
             font-weight: 900;
@@ -233,12 +246,12 @@
             color: #2c3e50;
             margin-bottom: 10px;
             line-height: 1.2;
-            min-height: 1.5em; /* 調整高度適應單行 */
+            min-height: 1.5em;
             display: flex;
             align-items: center;
             justify-content: flex-end;
             flex-direction: column;
-            word-break: break-word; /* 防止名字過長 */
+            word-break: break-word;
             padding: 0 5px;
         }
 
@@ -281,7 +294,6 @@
             align-self: center;
         }
 
-        /* 下一場按鈕區 */
         .next-match-area {
             margin-top: auto;
             padding-top: 15px;
@@ -297,7 +309,6 @@
             box-shadow: 0 4px 15px rgba(44, 62, 80, 0.4);
         }
 
-        /* 下半部：賽程列表 (Fixed Height) */
         .schedule-section {
             height: 30vh;
             min-height: 180px;
@@ -320,9 +331,7 @@
             font-weight: bold;
         }
 
-        .schedule-list {
-            flex: 1;
-        }
+        .schedule-list { flex: 1; }
 
         .match-card {
             background: white;
@@ -336,15 +345,8 @@
             font-size: 1rem;
             border-left: 5px solid transparent;
         }
-        .match-card.active {
-            border-left-color: var(--accent);
-            background: #fff;
-        }
-        .match-card.finished {
-            opacity: 0.6;
-            background: #e9ecef;
-            color: #888;
-        }
+        .match-card.active { border-left-color: var(--accent); background: #fff; }
+        .match-card.finished { opacity: 0.6; background: #e9ecef; color: #888; }
 
         .score-badge {
             background: #eee;
@@ -356,24 +358,20 @@
             text-align: center;
             font-size: 0.9rem;
         }
-        .active .score-badge {
-            background: var(--accent);
-            color: white;
-        }
-
-        /* 工具類 */
+        .active .score-badge { background: var(--accent); color: white; }
         .btn-green { background: var(--accent); color: white; border-radius: 8px; padding: 10px 20px; }
         .btn-outline { border: 1px solid #aaa; background: white; color: #555; border-radius: 6px; padding: 5px 12px; font-size: 0.85rem; }
 
+        .loading { color: #999; margin-top: 10px; font-size: 0.9rem; }
     </style>
 </head>
 <body>
 
-    <!-- 自訂彈跳視窗 -->
+    <!-- 彈跳視窗 -->
     <div id="custom-modal" class="modal-overlay">
         <div class="modal-card">
-            <div class="modal-title" id="modal-title">標題</div>
-            <div class="modal-msg" id="modal-msg">內容</div>
+            <div class="modal-title" id="modal-title"></div>
+            <div class="modal-msg" id="modal-msg"></div>
             <div class="modal-actions">
                 <button class="modal-btn btn-cancel" onclick="closeModal()">取消</button>
                 <button class="modal-btn btn-confirm" id="modal-confirm-btn">確定</button>
@@ -381,12 +379,27 @@
         </div>
     </div>
 
+    <!-- 0. 房間選擇頁面 -->
+    <div id="room-page" class="page">
+        <div class="setup-card" style="text-align:center;">
+            <h1 style="color:var(--primary); margin-bottom:10px;">🏸 連線羽球排程</h1>
+            <p style="color:#666; margin-bottom:20px;">請輸入球隊代碼 (Room ID)<br>讓大家進入同一個房間</p>
+            
+            <input type="text" id="room-id-input" placeholder="例如: team_friday" style="text-align:center; font-size:1.2rem; font-weight:bold;">
+            <button class="btn-green" style="width:100%; padding:15px; font-size:1.1rem;" onclick="joinRoom()">進入房間</button>
+            <div id="loading-text" class="loading" style="display:none;">正在連線資料庫...</div>
+        </div>
+    </div>
+
     <!-- 1. 設定頁面 -->
     <div id="setup-page" class="page">
         <div class="setup-card">
-            <h2 style="margin-bottom: 20px; color: var(--primary);">🏸 羽球雙打排程</h2>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h2 style="color: var(--primary); margin:0;">設定與名單</h2>
+                <span id="room-display-setup" class="room-badge"></span>
+            </div>
             
-            <!-- 賽制選擇 -->
+            <!-- 賽制 -->
             <div style="text-align:center; margin-bottom:5px; color:#666; font-size:0.9rem;">選擇賽制</div>
             <div class="mode-selector">
                 <label class="mode-label selected" onclick="selectMode(21, this)">
@@ -399,39 +412,34 @@
                 </label>
             </div>
 
-            <p style="color:#666; font-size:0.9rem; margin-top:10px;">參加人員名單</p>
-            
+            <p style="color:#666; font-size:0.9rem; margin-top:10px;">名單 (更動會即時同步)</p>
             <div style="display:flex; gap:10px; margin-bottom:15px;">
-                <input type="text" id="input-name" placeholder="輸入名字 (按Enter新增)" autocomplete="off">
+                <input type="text" id="input-name" placeholder="輸入名字 (按Enter)" autocomplete="off">
                 <button class="btn-green" onclick="addPlayer()">新增</button>
             </div>
 
-            <div id="player-list" style="margin-bottom:20px; min-height: 50px;">
-                <!-- JS 渲染 -->
-            </div>
+            <div id="player-list" style="margin-bottom:20px; min-height: 50px;"></div>
 
             <button class="btn-green" style="width:100%; padding:15px; font-size:1.1rem; margin-bottom:15px;" onclick="startSystem()">
-                開始排程比賽
+                開始 / 繼續比賽
             </button>
             
             <div style="text-align:center;">
-                <button class="btn-outline" onclick="clearData()">清除資料重置</button>
+                <button class="btn-outline" onclick="exitRoom()">離開房間</button>
             </div>
         </div>
     </div>
 
-    <!-- 2. 主應用頁面 (計分板 + 賽程) -->
+    <!-- 2. 主應用頁面 -->
     <div id="app-page">
-        
-        <!-- 上方：超大計分板 (Flex 1) -->
         <div class="scoreboard-section">
             <div class="match-info-bar">
                 第 <span id="match-id" style="font-weight:bold; color:var(--primary);">1</span> 場
                 <span id="target-score-display" class="target-score-badge">21分制</span>
+                <span id="room-display-app" class="room-badge" style="margin-left:5px;"></span>
             </div>
 
             <div class="scores-display">
-                <!-- 左隊 -->
                 <div class="team-block">
                     <div class="team-names" id="t1-names"></div>
                     <div class="score-number" id="t1-score" onclick="updateScore(1, 1)">0</div>
@@ -440,10 +448,7 @@
                         <button class="btn-control btn-plus" onclick="updateScore(1, 1)">+</button>
                     </div>
                 </div>
-
                 <div class="vs-text">VS</div>
-
-                <!-- 右隊 -->
                 <div class="team-block">
                     <div class="team-names" id="t2-names"></div>
                     <div class="score-number" id="t2-score" onclick="updateScore(2, 1)">0</div>
@@ -455,33 +460,33 @@
             </div>
 
             <div class="next-match-area">
-                <!-- 手動結束按鈕 -->
-                <button class="btn-finish" onclick="manualFinishClick()">
-                    結束本場 (下一場) ➔
-                </button>
+                <button class="btn-finish" onclick="manualFinishClick()">結束本場 (下一場) ➔</button>
             </div>
         </div>
 
-        <!-- 下方：賽程列表 (Fixed Height) -->
         <div class="schedule-section">
             <div class="schedule-header">
                 <span>賽程表</span>
                 <div>
-                    <!-- 紅色重置按鈕 -->
-                    <button class="btn-outline" onclick="clearData()" style="color: var(--danger); border-color: var(--danger);">全部重置</button>
+                    <button class="btn-outline" onclick="clearData()" style="color:var(--danger); border-color:var(--danger);">全部重置</button>
                     <button class="btn-outline" onclick="addMoreMatches()">+ 產生</button>
                 </div>
             </div>
-            
-            <div class="schedule-list" id="schedule-container">
-                <!-- JS 渲染 -->
-            </div>
+            <div class="schedule-list" id="schedule-container"></div>
         </div>
-
     </div>
 
     <script>
-        // --- 核心資料 ---
+        // --- Firebase Init ---
+        let db, auth, docRef;
+        let unsubscribe = null;
+        let currentRoomId = "";
+
+        // 環境變數
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default';
+
+        // --- App State ---
         const DEFAULT_STATE = {
             players: [],
             schedule: [],
@@ -489,65 +494,176 @@
             partnerships: {},
             targetScore: 21
         };
-
         let state = JSON.parse(JSON.stringify(DEFAULT_STATE));
         let tempTargetScore = 21;
-        let isModalOpen = false; // 防止重複開啟
+        let isModalOpen = false;
+        let isSaving = false; // 防止連續寫入
 
-        document.addEventListener('DOMContentLoaded', () => {
-            loadData();
-            renderPlayers();
-            updateModeUI();
+        // --- 初始化 ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Firebase Setup
+            const { initializeApp, getAuth, signInAnonymously, getFirestore } = window.firebaseModules;
+            const app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+
+            // 檢查是否已登入
+            document.getElementById('loading-text').style.display = 'block';
             
+            // 優先使用 token，否則匿名
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                 const { signInWithCustomToken } = window.firebaseModules; // Dynamic import if needed or assume available
+                 // Actually signInAnonymously is safer for generic demo without backend token gen
+                 await signInAnonymously(auth);
+            } else {
+                 await signInAnonymously(auth);
+            }
+            
+            document.getElementById('loading-text').style.display = 'none';
+
+            // 檢查網址是否有 ?room=xxx，如果有直接進入
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomParam = urlParams.get('room');
+            if(roomParam) {
+                document.getElementById('room-id-input').value = roomParam;
+                joinRoom();
+            }
+
+            // 綁定輸入框 Enter
             document.getElementById('input-name').addEventListener('keypress', (e) => {
                 if(e.key === 'Enter') addPlayer();
             });
-
-            if(state.schedule.length > 0) {
-                showApp();
-            }
+            document.getElementById('room-id-input').addEventListener('keypress', (e) => {
+                if(e.key === 'Enter') joinRoom();
+            });
         });
 
-        // --- 彈窗系統 ---
-        function showModal(title, msg, confirmCallback) {
-            if(isModalOpen) return;
-            isModalOpen = true;
-            
-            document.getElementById('modal-title').innerText = title;
-            document.getElementById('modal-msg').innerHTML = msg;
-            
-            const confirmBtn = document.getElementById('modal-confirm-btn');
-            const newBtn = confirmBtn.cloneNode(true);
-            confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
-            
-            newBtn.onclick = () => {
-                closeModal();
-                confirmCallback();
-            };
+        // --- 房間系統 ---
+        async function joinRoom() {
+            const input = document.getElementById('room-id-input');
+            const roomId = input.value.trim();
+            if(!roomId) { showModal("提示", "請輸入房間代碼", ()=>{}); return; }
 
-            document.getElementById('custom-modal').classList.add('show');
+            currentRoomId = roomId;
+            const { doc, onSnapshot, collection } = window.firebaseModules;
+            
+            // 路徑: /artifacts/{appId}/public/data/badminton_rooms/{roomId}
+            const roomsCol = collection(db, 'artifacts', appId, 'public', 'data', 'badminton_rooms');
+            docRef = doc(roomsCol, roomId);
+
+            document.getElementById('loading-text').innerText = "連線中...";
+            document.getElementById('loading-text').style.display = 'block';
+
+            // 監聽資料庫變化
+            if(unsubscribe) unsubscribe();
+            unsubscribe = onSnapshot(docRef, (docSnap) => {
+                document.getElementById('loading-text').style.display = 'none';
+                if (docSnap.exists()) {
+                    state = docSnap.data();
+                    // 同步到 UI
+                    syncUI();
+                } else {
+                    // 新房間，寫入預設值
+                    saveData(true); 
+                    syncUI();
+                }
+                // 切換頁面
+                if(state.schedule.length > 0) {
+                    showAppPage();
+                } else {
+                    showSetupPage();
+                }
+            }, (error) => {
+                console.error("Sync error:", error);
+                showModal("錯誤", "連線失敗，請重試", ()=>{});
+            });
+
+            // 更新網址方便分享
+            const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?room=' + roomId;
+            window.history.pushState({path:newUrl},'',newUrl);
+            
+            // 顯示房間標籤
+            document.getElementById('room-display-setup').innerText = roomId;
+            document.getElementById('room-display-app').innerText = roomId;
         }
 
-        function closeModal() {
-            document.getElementById('custom-modal').classList.remove('show');
-            setTimeout(() => { isModalOpen = false; }, 300);
+        function exitRoom() {
+            if(unsubscribe) unsubscribe();
+            state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+            currentRoomId = "";
+            document.getElementById('app-page').style.display = 'none';
+            document.getElementById('setup-page').style.display = 'none';
+            document.getElementById('room-page').style.display = 'flex';
+            window.history.pushState({}, document.title, window.location.pathname);
         }
 
-        // --- 設定頁面功能 ---
+        async function saveData(force = false) {
+            if(!currentRoomId) return;
+            // 簡單的防抖動或鎖定，這裡直接寫入
+            const { setDoc } = window.firebaseModules;
+            try {
+                await setDoc(docRef, state);
+            } catch(e) {
+                console.error("Save failed", e);
+            }
+        }
+
+        function syncUI() {
+            renderPlayers();
+            updateModeUI();
+            if(state.schedule.length > 0) {
+                updateScoreUI();
+                renderSchedule();
+            }
+        }
+
+        // --- 頁面切換 ---
+        function showSetupPage() {
+            document.getElementById('room-page').style.display = 'none';
+            document.getElementById('app-page').style.display = 'none';
+            document.getElementById('setup-page').style.display = 'flex';
+        }
+
+        function showAppPage() {
+            document.getElementById('room-page').style.display = 'none';
+            document.getElementById('setup-page').style.display = 'none';
+            document.getElementById('app-page').style.display = 'flex';
+            
+            // 檢查當前場次
+            let idx = state.schedule.findIndex(m => m.status !== 'finished');
+            if(idx === -1 && state.schedule.length > 0) {
+                 // 全打完了
+                 idx = state.schedule.length - 1;
+            } else if (idx === -1) {
+                 // 沒賽程
+                 showSetupPage();
+                 return;
+            }
+            state.currentIdx = idx;
+            // 確保本地狀態更新後，如果是 pending 轉 active，這需要寫入 DB
+            if(state.schedule[idx] && state.schedule[idx].status === 'pending') {
+                state.schedule[idx].status = 'active';
+                saveData();
+            }
+            updateScoreUI();
+            renderSchedule();
+        }
+
+        // --- 業務邏輯 ---
+
         function selectMode(score, element) {
             tempTargetScore = score;
+            // 本地 UI 立即反應，不寫入 DB，等按下開始才寫入
             document.querySelectorAll('.mode-label').forEach(el => el.classList.remove('selected'));
             element.classList.add('selected');
-            const radio = element.querySelector('input');
-            if(radio) radio.checked = true;
         }
 
         function updateModeUI() {
-            const savedScore = state.targetScore || 21;
-            tempTargetScore = savedScore;
+            const currentScore = state.targetScore || 21;
+            // 如果在設定頁，顯示 state 的值
             const radios = document.getElementsByName('mode');
             radios.forEach(r => {
-                if(parseInt(r.value) === savedScore) {
+                if(parseInt(r.value) === currentScore) {
                     r.checked = true;
                     r.parentElement.classList.add('selected');
                 } else {
@@ -560,17 +676,19 @@
             const input = document.getElementById('input-name');
             const name = input.value.trim();
             if(!name) return;
-            if(state.players.find(p => p.name === name)) { alert('名字重複囉'); return; }
+            if(state.players.find(p => p.name === name)) { 
+                showModal("提示", "名字重複囉", ()=>{}); 
+                return; 
+            }
             state.players.push({ name, played: 0 });
             input.value = '';
             saveData();
-            renderPlayers();
         }
 
         function renderPlayers() {
             const div = document.getElementById('player-list');
             if(state.players.length === 0) {
-                div.innerHTML = '<p style="color:#999; padding:10px;">目前沒有人員，請新增</p>';
+                div.innerHTML = '<p style="color:#999; padding:10px;">名單空白</p>';
                 return;
             }
             div.innerHTML = state.players.map((p, i) => `
@@ -579,142 +697,114 @@
         }
 
         function removePlayer(idx) {
+            // 在多人模式下，刪除需謹慎，這裡直接刪
             state.players.splice(idx, 1);
             saveData();
-            renderPlayers();
         }
 
         function startSystem() {
-            if(state.players.length < 4) { alert('至少需要4人'); return; }
+            if(state.players.length < 4) { showModal("提示","至少需要4人",()=>{}); return; }
+            
+            // 應用設定
             state.targetScore = tempTargetScore;
+            
             if(state.schedule.length === 0) {
                 state.partnerships = {};
                 generateMatches(10);
+            } else {
+                saveData();
+                showAppPage();
             }
-            saveData();
-            showApp();
         }
 
-        // --- 排程邏輯 ---
         function generateMatches(count) {
             const startId = state.schedule.length + 1;
             for(let i=0; i<count; i++) {
                 let pool = [...state.players];
+                // 簡單排序: 場次少 > 隨機
                 pool.sort((a, b) => (a.played - b.played) || (Math.random() - 0.5));
                 const picked = pool.slice(0, 4);
+                
+                // 更新上場數
                 picked.forEach(p => {
                     const realP = state.players.find(x => x.name === p.name);
                     if(realP) realP.played++;
                 });
 
-                const combos = [
-                    { t1: [picked[0], picked[1]], t2: [picked[2], picked[3]] },
-                    { t1: [picked[0], picked[2]], t2: [picked[1], picked[3]] },
-                    { t1: [picked[0], picked[3]], t2: [picked[1], picked[2]] }
-                ];
-                combos.forEach(c => {
-                    c.w = getPartnerCount(c.t1[0].name, c.t1[1].name) + 
-                          getPartnerCount(c.t2[0].name, c.t2[1].name);
-                });
-                combos.sort((a, b) => a.w - b.w || (Math.random() - 0.5));
-                const best = combos[0];
-
-                addPartnerCount(best.t1[0].name, best.t1[1].name);
-                addPartnerCount(best.t2[0].name, best.t2[1].name);
+                // 簡單分組
+                const t1 = [picked[0], picked[1]];
+                const t2 = [picked[2], picked[3]];
 
                 state.schedule.push({
                     id: startId + i,
-                    t1: [best.t1[0].name, best.t1[1].name],
-                    t2: [best.t2[0].name, best.t2[1].name],
+                    t1: t1.map(p=>p.name),
+                    t2: t2.map(p=>p.name),
                     s1: 0, s2: 0, status: 'pending'
                 });
             }
             saveData();
-            renderSchedule();
-        }
-
-        function getPartnerCount(n1, n2) {
-            return state.partnerships[[n1, n2].sort().join('|')] || 0;
-        }
-        function addPartnerCount(n1, n2) {
-            const k = [n1, n2].sort().join('|');
-            state.partnerships[k] = (state.partnerships[k] || 0) + 1;
-        }
-
-        // --- App 頁面邏輯 ---
-        function showApp() {
-            document.getElementById('setup-page').style.display = 'none';
-            document.getElementById('app-page').style.display = 'flex';
-            
-            let idx = state.schedule.findIndex(m => m.status !== 'finished');
-            if(idx === -1) {
-                generateMatches(5);
-                idx = state.schedule.findIndex(m => m.status !== 'finished');
-            }
-            state.currentIdx = idx;
-            
-            if(state.schedule[idx].status === 'pending') state.schedule[idx].status = 'active';
-            
-            updateScoreUI();
-            renderSchedule();
         }
 
         function updateScoreUI() {
+            if(!state.schedule[state.currentIdx]) return;
             const m = state.schedule[state.currentIdx];
-            if(!m) return;
-
             const target = state.targetScore || 21;
+
             document.getElementById('match-id').innerText = m.id;
             document.getElementById('target-score-display').innerText = `${target}分制`;
-
-            // 單行斜線顯示
+            
             document.getElementById('t1-names').innerText = `${m.t1[0]} / ${m.t1[1]}`;
             document.getElementById('t2-names').innerText = `${m.t2[0]} / ${m.t2[1]}`;
-            
             document.getElementById('t1-score').innerText = m.s1;
             document.getElementById('t2-score').innerText = m.s2;
         }
 
         function updateScore(team, delta) {
-            if (isModalOpen) return;
-
-            const currentIdx = state.currentIdx;
-            const m = state.schedule[currentIdx];
+            if(isModalOpen) return;
+            const m = state.schedule[state.currentIdx];
             if(!m || m.status === 'finished') return;
 
             if(team === 1) m.s1 = Math.max(0, m.s1 + delta);
             else m.s2 = Math.max(0, m.s2 + delta);
-            
-            document.getElementById('t1-score').innerText = m.s1;
-            document.getElementById('t2-score').innerText = m.s2;
-            saveData();
-            renderSchedule(); 
 
-            // 自動判定 (含 Deuce 規則)
+            // 檢查 Deuce 規則
             const target = state.targetScore || 21;
-            const currentMaxScore = Math.max(m.s1, m.s2);
-            const scoreDiff = Math.abs(m.s1 - m.s2);
+            const maxS = Math.max(m.s1, m.s2);
+            const diff = Math.abs(m.s1 - m.s2);
 
-            // 達到分數 且 分差 >= 2 (Deuce) 則直接結束
-            if (currentMaxScore >= target && scoreDiff >= 2 && m.status !== 'finished') {
-                finishMatch(currentIdx);
+            if(maxS >= target && diff >= 2) {
+                // 結束比賽
+                finishMatch(state.currentIdx);
+            } else {
+                saveData(); // 僅更新分數
             }
         }
 
         function manualFinishClick() {
             const m = state.schedule[state.currentIdx];
-            if (!m || m.status === 'finished') return;
-            // 手動直接結束
+            if(!m || m.status === 'finished') return;
             finishMatch(state.currentIdx);
         }
 
         function finishMatch(idx) {
-            const m = state.schedule[idx];
-            if (!m) return;
+            if(state.schedule[idx]) {
+                state.schedule[idx].status = 'finished';
+                saveData();
+                // 觸發 saveData 後，onSnapshot 會回來呼叫 showAppPage() 更新 UI
+            }
+        }
 
-            m.status = 'finished';
-            saveData();
-            showApp(); 
+        function addMoreMatches() {
+            generateMatches(5);
+        }
+
+        function clearData() {
+            showModal("警告", "這會清除此房間所有資料，確定？", () => {
+                state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+                state.targetScore = tempTargetScore; // 保留賽制設定
+                saveData();
+                showSetupPage();
+            });
         }
 
         function renderSchedule() {
@@ -724,56 +814,38 @@
                 const activeClass = isCur ? 'active' : '';
                 const finishedClass = m.status === 'finished' ? 'finished' : '';
                 const scoreText = m.status === 'pending' ? 'vs' : `${m.s1}:${m.s2}`;
-                const scoreStyle = m.status === 'pending' ? 'color:#ccc' : 'color:#333';
                 
                 return `
                     <div class="match-card ${activeClass} ${finishedClass}" id="match-${i}">
                         <div style="width:30px; color:#999; font-size:0.9rem;">${m.id}</div>
                         <div style="flex:1; text-align:right; font-weight:500;">${m.t1[0]} / ${m.t1[1]}</div>
-                        <div style="margin:0 12px; ${scoreStyle}" class="score-badge">${scoreText}</div>
+                        <div style="margin:0 12px;" class="score-badge">${scoreText}</div>
                         <div style="flex:1; text-align:left; font-weight:500;">${m.t2[0]} / ${m.t2[1]}</div>
                     </div>
                 `;
             }).join('');
-
+            
             setTimeout(() => {
                 const el = document.querySelector('.match-card.active');
                 if(el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }, 100);
         }
 
-        function addMoreMatches() {
-            generateMatches(5);
-            renderSchedule();
+        // --- Modal ---
+        function showModal(title, msg, callback) {
+            if(isModalOpen) return;
+            isModalOpen = true;
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-msg').innerHTML = msg;
+            const btn = document.getElementById('modal-confirm-btn');
+            const newBtn = btn.cloneNode(true);
+            btn.parentNode.replaceChild(newBtn, btn);
+            newBtn.onclick = () => { closeModal(); callback(); };
+            document.getElementById('custom-modal').classList.add('show');
         }
-
-        function backToSetup() {
-            // 這個現在沒用到，因為已經改成直接全部重置
-        }
-
-        function clearData() {
-            showModal("警告", "這會刪除所有名單和對戰紀錄，確定重來？", () => {
-                // 清除並回到設定頁，不重新整理
-                localStorage.removeItem('badminton_v3');
-                state = JSON.parse(JSON.stringify(DEFAULT_STATE));
-                
-                document.getElementById('app-page').style.display = 'none';
-                document.getElementById('setup-page').style.display = 'flex';
-                
-                document.getElementById('input-name').value = '';
-                document.getElementById('schedule-container').innerHTML = '';
-                
-                renderPlayers();
-                updateModeUI();
-            });
-        }
-
-        function saveData() {
-            localStorage.setItem('badminton_v3', JSON.stringify(state));
-        }
-        function loadData() {
-            const d = localStorage.getItem('badminton_v3');
-            if(d) try { state = JSON.parse(d); } catch(e){}
+        function closeModal() {
+            document.getElementById('custom-modal').classList.remove('show');
+            setTimeout(() => { isModalOpen = false; }, 300);
         }
 
     </script>
