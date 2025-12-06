@@ -94,6 +94,8 @@
             width: 100%;
             height: 100%;
             overflow: hidden;
+            /* 關鍵修改：讓全螢幕模式左右相反，方便對面球員觀看 */
+            flex-direction: row-reverse; 
         }
 
         .fs-team {
@@ -150,6 +152,7 @@
             height: 50%;
             background: #333;
             margin: 0 10px;
+            cursor: pointer; /* 讓分隔線也有點擊感 */
         }
 
         /* --- 自訂彈跳視窗 (Modal) --- */
@@ -379,6 +382,12 @@
             margin: 0 10px;
             font-style: italic;
             align-self: center;
+            cursor: pointer; /* 提示可點擊 */
+            user-select: none;
+            transition: transform 0.1s;
+        }
+        .vs-text:active {
+            transform: scale(0.9);
         }
 
         .next-match-area {
@@ -462,8 +471,11 @@
         .active .score-badge { background: var(--accent); color: white; }
         .btn-green { background: var(--accent); color: white; border-radius: 8px; padding: 10px 20px; }
         .btn-outline { border: 1px solid #aaa; background: white; color: #555; border-radius: 6px; padding: 5px 12px; font-size: 0.85rem; }
-
+        .btn-icon { background: none; border: none; font-size: 1.2rem; cursor: pointer; padding: 5px; }
         .loading { color: #999; margin-top: 10px; font-size: 0.9rem; }
+        
+        .spinning { animation: spin 1s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
@@ -481,7 +493,8 @@
                 </div>
             </div>
             
-            <div class="fs-divider"></div>
+            <!-- VS 點擊可換邊 -->
+            <div class="fs-divider" onclick="swapTeams()"></div>
 
             <div class="fs-team">
                 <div class="fs-names" id="fs-t2-names"></div>
@@ -523,7 +536,10 @@
         <div class="setup-card">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                 <h2 style="color: var(--primary); margin:0;">設定與名單</h2>
-                <span id="room-display-setup" class="room-badge"></span>
+                <div style="display:flex; align-items:center; gap:5px;">
+                    <span id="room-display-setup" class="room-badge"></span>
+                    <button id="btn-refresh-setup" class="btn-icon" onclick="refreshData()" title="重新整理">🔄</button>
+                </div>
             </div>
             
             <div style="text-align:center; margin-bottom:5px; color:#666; font-size:0.9rem;">選擇賽制</div>
@@ -563,7 +579,10 @@
                 第 <span id="match-id" style="font-weight:bold; color:var(--primary);">1</span> 場
                 <span id="target-score-display" class="target-score-badge">21分制</span>
                 <span id="room-display-app" class="room-badge" style="margin-left:5px;"></span>
-                <button class="btn-outline" style="margin-left:auto; padding:5px 10px;" onclick="openFullscreen()">⛶ 全螢幕</button>
+                <div style="margin-left:auto; display:flex; gap:10px;">
+                    <button id="btn-refresh-app" class="btn-icon" onclick="refreshData()" title="重新整理">🔄</button>
+                    <button class="btn-outline" style="padding:5px 10px;" onclick="openFullscreen()">⛶ 全螢幕</button>
+                </div>
             </div>
 
             <div class="scores-display">
@@ -575,7 +594,8 @@
                         <button class="btn-control btn-plus" onclick="updateScore(1, 1)">+</button>
                     </div>
                 </div>
-                <div class="vs-text">VS</div>
+                <!-- 點擊 VS 可交換 -->
+                <div class="vs-text" onclick="swapTeams()" title="點擊交換隊伍">VS ⇄</div>
                 <div class="team-block">
                     <div class="team-names" id="t2-names"></div>
                     <div class="score-number" id="t2-score" onclick="updateScore(2, 1)">0</div>
@@ -662,22 +682,7 @@
             currentRoomId = roomId;
             document.getElementById('loading-text').style.display = 'block';
 
-            // 1. 讀取初始資料
-            const { data, error } = await supabase
-                .from('rooms')
-                .select('data')
-                .eq('id', roomId)
-                .single();
-
-            if (error && error.code !== 'PGRST116') { 
-                console.error("Fetch error:", error);
-            }
-
-            if (data && data.data) {
-                state = data.data;
-            } else {
-                await saveData(); 
-            }
+            await refreshData(true); // Initial fetch
             
             // 2. 訂閱即時更新
             if(realtimeChannel) await supabase.removeChannel(realtimeChannel);
@@ -719,6 +724,41 @@
             } catch(e){}
         }
 
+        // --- 重新整理資料 ---
+        async function refreshData(isInitial = false) {
+            if(!currentRoomId || !supabase) return;
+            
+            // UI 轉圈圈效果
+            const btnSetup = document.getElementById('btn-refresh-setup');
+            const btnApp = document.getElementById('btn-refresh-app');
+            if(btnSetup) btnSetup.classList.add('spinning');
+            if(btnApp) btnApp.classList.add('spinning');
+
+            const { data, error } = await supabase
+                .from('rooms')
+                .select('data')
+                .eq('id', currentRoomId)
+                .single();
+
+            // 移除轉圈圈
+            if(btnSetup) btnSetup.classList.remove('spinning');
+            if(btnApp) btnApp.classList.remove('spinning');
+
+            if (error && error.code !== 'PGRST116') { 
+                console.error("Fetch error:", error);
+                if(!isInitial) showModal("錯誤", "無法取得最新資料", ()=>{});
+                return;
+            }
+
+            if (data && data.data) {
+                state = data.data;
+                if(!isInitial) syncUI();
+            } else if (isInitial) {
+                // 新房間，寫入預設值
+                await saveData(); 
+            }
+        }
+
         async function saveData() {
             if(!currentRoomId || !supabase) return;
             const { error } = await supabase
@@ -743,9 +783,7 @@
             updateModeUI();
             
             if(state.schedule.length > 0) {
-                // 優先信任 DB 中的 currentIdx，除非它是無效的
                 if (typeof state.currentIdx !== 'number' || state.currentIdx < 0 || state.currentIdx >= state.schedule.length) {
-                     // 只有當索引無效時，才自動跳轉到第一個未完成的比賽
                      let activeIdx = state.schedule.findIndex(m => m.status !== 'finished');
                      if(activeIdx === -1) activeIdx = state.schedule.length - 1;
                      state.currentIdx = activeIdx;
@@ -754,7 +792,6 @@
                 updateScoreUI();
                 renderSchedule();
                 
-                // 確保在 App 頁面
                 const isAppVisible = document.getElementById('app-page').style.display === 'flex';
                 if(!isAppVisible && state.schedule.length > 0) {
                     showAppPage();
@@ -774,19 +811,14 @@
             document.getElementById('setup-page').style.display = 'none';
             document.getElementById('app-page').style.display = 'flex';
             
-            // 找出正在進行的場次 (初始載入時)
             let idx = state.schedule.findIndex(m => m.status !== 'finished');
             if(idx === -1 && state.schedule.length > 0) idx = state.schedule.length - 1;
             else if(idx === -1) { showSetupPage(); return; }
             
-            // 只有初始進入時才覆蓋 currentIdx
-            // 如果已經有 currentIdx (來自同步)，syncUI 會處理
-            // 這裡主要是為了第一次載入沒資料時的防呆
             if (typeof state.currentIdx !== 'number') {
                 state.currentIdx = idx;
             }
             
-            // 觸發狀態更新
             if(state.schedule[state.currentIdx] && state.schedule[state.currentIdx].status === 'pending') {
                 state.schedule[state.currentIdx].status = 'active';
                 saveData();
@@ -796,6 +828,29 @@
         }
 
         // --- 業務邏輯 ---
+        
+        // 交換隊伍功能
+        function swapTeams() {
+            if(state.schedule.length === 0) return;
+            const m = state.schedule[state.currentIdx];
+            
+            // 僅允許未結束或正在進行的比賽交換
+            if(m && m.status !== 'finished' || confirm("這場比賽已結束，確定要交換隊伍並修改嗎？")) {
+                // 交換名字
+                const tempT1 = m.t1;
+                m.t1 = m.t2;
+                m.t2 = tempT1;
+
+                // 交換分數
+                const tempS1 = m.s1;
+                m.s1 = m.s2;
+                m.s2 = tempS1;
+
+                saveData();
+                syncUI();
+            }
+        }
+
         function selectMode(score, element) {
             tempTargetScore = score;
             document.querySelectorAll('.mode-label').forEach(el => el.classList.remove('selected'));
