@@ -9,9 +9,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#2c3e50">
-    <title>羽球排程 v5 (Global)</title>
+    <title>羽球助手</title>
     
-    <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/zxuan-c/badminton-partner-v4/refs/heads/main/icon2.jpg">
+    <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/zxuan-c/badminton-partner-v4/refs/heads/main/icon.jpg">
 
     <!-- Supabase SDK (CDN) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -447,7 +447,7 @@
                 <span class="schedule-title">SCHEDULE</span>
                 <div class="toolbar">
                     <button onclick="clearData()" style="color:var(--danger); border-color:var(--danger);">重置</button>
-                    <button onclick="addMoreMatches()">+ 5場</button>
+                    <button onclick="addMoreMatches()">+ 20場</button>
                 </div>
             </div>
             <div id="schedule-container" style="padding-bottom:20px;"></div>
@@ -696,7 +696,7 @@
             state.targetScore = 11; // 強制固定 11
             
             if(state.schedule.length === 0) {
-                generateMatches(5); // 預設產生5場
+                generateMatches(20); // 預設產生20場
             }
             saveData();
             // syncUI 會負責切換頁面
@@ -740,7 +740,8 @@
                     const isSamePair = (p1, p2) => {
                         // p1 是本次候選的球員物件陣列, p2 是上一場的名字字串陣列
                         const n1 = p1.map(x => x.name).sort().join(',');
-                        const n2 = p2.sort().join(',');
+                        // 這裡使用複製陣列來排序，避免更動到原始資料
+                        const n2 = [...p2].sort().join(',');
                         return n1 === n2;
                     };
 
@@ -919,7 +920,7 @@
         }
 
         function addMoreMatches() {
-            generateMatches(5);
+            generateMatches(20); // 這裡改為產生 20 場
             // 如果當前是結束狀態，自動跳到新產生的第一場
             const m = state.schedule[state.currentIdx];
             if(m && m.status === 'finished') {
