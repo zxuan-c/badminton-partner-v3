@@ -182,16 +182,8 @@
         }
         .player-tag span:hover { color: var(--danger); }
 
-        .mode-selector { display: flex; gap: 10px; margin-bottom: 20px; }
-        .mode-label {
-            flex: 1; text-align: center; padding: 12px; background: #f8f9fa;
-            border-radius: 12px; cursor: pointer; border: 2px solid transparent;
-            transition: all 0.2s; font-weight: 500; color: #666;
-        }
-        .mode-label.selected {
-            background: rgba(39, 174, 96, 0.1); border-color: var(--accent);
-            color: var(--accent); font-weight: bold;
-        }
+        /* 移除 Mode Selector */
+        /* .mode-selector { display: flex; gap: 10px; margin-bottom: 20px; } */
 
         /* --- 主應用頁面 (計分板) --- */
         #app-page {
@@ -381,16 +373,9 @@
                 </div>
             </div>
             
-            <label style="display:block; color:#888; font-size:0.9rem; margin-bottom:8px;">目標分數 (Target Score)</label>
-            <div class="mode-selector">
-                <label class="mode-label selected" onclick="selectMode(21, this)">
-                    21分
-                    <input type="radio" name="mode" value="21" checked style="display:none">
-                </label>
-                <label class="mode-label" onclick="selectMode(11, this)">
-                    11分
-                    <input type="radio" name="mode" value="11" style="display:none">
-                </label>
+            <!-- 目標分數 (固定顯示) -->
+            <div style="background:#f9f9f9; padding:15px; border-radius:12px; text-align:center; margin-bottom:20px; color:#666;">
+                賽制：<strong style="color:var(--primary);">11分制</strong>
             </div>
 
             <label style="display:block; color:#888; font-size:0.9rem; margin-bottom:8px;">球員名單 (由上場次數自動排序)</label>
@@ -414,7 +399,7 @@
                 <div style="display:flex; align-items:center;">
                     <span class="status-dot" id="connection-dot-app"></span>
                     <span class="match-badge">Match <span id="match-id">1</span></span>
-                    <span class="match-badge" style="margin-left:5px; background:#fff; border:1px solid #eee;" id="target-score-display">21</span>
+                    <span class="match-badge" style="margin-left:5px; background:#fff; border:1px solid #eee;" id="target-score-display">11</span>
                 </div>
                 <div style="display:flex; gap:10px; align-items:center;">
                     <button class="btn-icon" onclick="refreshData()" style="color:#888; background:transparent; font-size:1.2rem;">🔄</button>
@@ -487,11 +472,10 @@
             players: [],
             schedule: [],
             currentIdx: 0,
-            targetScore: 21,
+            targetScore: 11, // 固定 11 分
             timestamp: 0 // 用於強制刷新
         };
         let state = JSON.parse(JSON.stringify(DEFAULT_STATE));
-        let tempTargetScore = 21;
         let isModalOpen = false;
 
         // --- Wake Lock (防止螢幕休眠) ---
@@ -596,10 +580,11 @@
 
             if (data && data.data) {
                 state = data.data;
+                // 確保舊資料也被強制更新為 11 分
+                state.targetScore = 11;
                 syncUI();
             } else if (isInitial) {
                 // 如果是新房間(第一次執行)，建立預設資料
-                // 這裡隱式地建立了房間，之後大家都會連到這個 ID
                 await saveData(); 
                 syncUI();
             }
@@ -618,7 +603,7 @@
         // --- UI 同步與渲染 ---
         function syncUI() {
             renderPlayers();
-            updateModeUI();
+            // updateModeUI(); // 已移除
             
             // 決定顯示哪個頁面
             if(state.schedule.length > 0) {
@@ -636,8 +621,6 @@
                 renderSchedule();
                 
                 // 如果在設定頁面但已經有賽程，自動跳轉到計分板
-                // 注意：如果是在 setup 頁面剛加完人按開始，這裡會負責切換
-                // 但如果是重新整理，且有賽程，也應該直接顯示 app page
                 const setupPage = document.getElementById('setup-page');
                 const appPage = document.getElementById('app-page');
                 
@@ -680,24 +663,6 @@
             syncUI();
         }
 
-        function selectMode(score, element) {
-            tempTargetScore = score;
-            document.querySelectorAll('.mode-label').forEach(el => el.classList.remove('selected'));
-            element.classList.add('selected');
-        }
-
-        function updateModeUI() {
-            const currentScore = state.targetScore || 21;
-            const radios = document.getElementsByName('mode');
-            radios.forEach(r => {
-                if(parseInt(r.value) === currentScore) {
-                    r.parentElement.classList.add('selected');
-                } else {
-                    r.parentElement.classList.remove('selected');
-                }
-            });
-        }
-
         function addPlayer() {
             const input = document.getElementById('input-name');
             const name = input.value.trim();
@@ -728,7 +693,7 @@
 
         function startSystem() {
             if(state.players.length < 4) { showModal("提示","至少需要 4 位球員才能產生雙打賽程",()=>{}); return; }
-            state.targetScore = tempTargetScore;
+            state.targetScore = 11; // 強制固定 11
             
             if(state.schedule.length === 0) {
                 generateMatches(5); // 預設產生5場
@@ -737,9 +702,12 @@
             // syncUI 會負責切換頁面
         }
 
+        // 產生賽程 (含連續防呆機制)
         function generateMatches(count) {
-            const startId = state.schedule.length + 1;
-            // 簡單的隨機配對邏輯：優先選上場次數少的
+            let startId = state.schedule.length + 1;
+            // 取得上一場比賽，用來檢查重複組合
+            let lastMatch = state.schedule.length > 0 ? state.schedule[state.schedule.length - 1] : null;
+
             for(let i=0; i<count; i++) {
                 let pool = [...state.players];
                 // 排序：上場少 -> 隨機
@@ -754,25 +722,65 @@
                     if(realP) realP.played++;
                 });
 
-                // 隨機分隊 (1,2 vs 3,4) 或 (1,3 vs 2,4) 等
-                picked.sort(() => Math.random() - 0.5);
-                const t1 = [picked[0].name, picked[1].name];
-                const t2 = [picked[2].name, picked[3].name];
+                // --- 產生所有可能組合並檢查重複 ---
+                // 4人有 3 種配對方式: (0,1 vs 2,3), (0,2 vs 1,3), (0,3 vs 1,2)
+                const combinations = [
+                    [[picked[0], picked[1]], [picked[2], picked[3]]],
+                    [[picked[0], picked[2]], [picked[1], picked[3]]],
+                    [[picked[0], picked[3]], [picked[1], picked[2]]]
+                ];
+                
+                // 隨機打亂組合順序
+                combinations.sort(() => Math.random() - 0.5);
 
-                state.schedule.push({
+                let chosen = combinations[0]; // 預設選第一個
+
+                // 如果有上一場，則嘗試尋找沒有重複搭檔的組合
+                if (lastMatch) {
+                    const isSamePair = (p1, p2) => {
+                        // p1 是本次候選的球員物件陣列, p2 是上一場的名字字串陣列
+                        const n1 = p1.map(x => x.name).sort().join(',');
+                        const n2 = p2.sort().join(',');
+                        return n1 === n2;
+                    };
+
+                    for (let combo of combinations) {
+                        const teamA = combo[0];
+                        const teamB = combo[1];
+                        
+                        // 檢查 A隊 是否跟上一場的 T1 或 T2 重複
+                        const conflictA = isSamePair(teamA, lastMatch.t1) || isSamePair(teamA, lastMatch.t2);
+                        // 檢查 B隊 是否跟上一場的 T1 或 T2 重複
+                        const conflictB = isSamePair(teamB, lastMatch.t1) || isSamePair(teamB, lastMatch.t2);
+                        
+                        // 兩隊都沒有重複，就是完美的組合
+                        if (!conflictA && !conflictB) {
+                            chosen = combo;
+                            break;
+                        }
+                    }
+                }
+
+                const t1 = chosen[0].map(p => p.name);
+                const t2 = chosen[1].map(p => p.name);
+
+                const newMatch = {
                     id: startId + i,
                     t1: t1,
                     t2: t2,
                     s1: 0, s2: 0,
-                    status: 'pending' // pending, active, finished
-                });
+                    status: 'pending' 
+                };
+                
+                state.schedule.push(newMatch);
+                lastMatch = newMatch; // 更新上一場為這一場，供下一輪迴圈檢查
             }
         }
 
         function updateScoreUI() {
             if(!state.schedule[state.currentIdx]) return;
             const m = state.schedule[state.currentIdx];
-            const target = state.targetScore || 21;
+            const target = 11; // 固定 11 分
 
             document.getElementById('match-id').innerText = m.id;
             document.getElementById('target-score-display').innerText = target;
@@ -837,8 +845,8 @@
             // 如果分數沒變 (例如 0 減 1)，不處理
             if(m.s1 === oldS1 && m.s2 === oldS2) return;
 
-            // --- 簡化後的規則：達到目標分數且兩分差即勝出，移除 30 分上限 ---
-            const target = state.targetScore || 21;
+            // --- 簡化後的規則：達到目標分數且兩分差即勝出 ---
+            const target = 11;
             const maxS = Math.max(m.s1, m.s2);
             const diff = Math.abs(m.s1 - m.s2);
             
