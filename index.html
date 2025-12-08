@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#2c3e50">
-    <title>羽球助手</title>
+    <title>羽球夥伴</title>
     
     <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/zxuan-c/badminton-partner-v4/refs/heads/main/icon.jpg">
 
@@ -456,9 +456,7 @@
 
     <script>
         // --- 設定 ---
-        // 使用固定的 Room ID，所有人共享
         const GLOBAL_ROOM_ID = 'badminton_global_room_v1';
-        
         const SUPABASE_URL = 'https://dgdolkbubvyggijsddtl.supabase.co'; 
         const SUPABASE_KEY = 'sb_publishable_-tIVFIoo0VXjtrWrKadCgw__QO8IAbW';
 
@@ -473,7 +471,7 @@
             schedule: [],
             currentIdx: 0,
             targetScore: 11, // 固定 11 分
-            timestamp: 0 // 用於強制刷新
+            timestamp: 0 
         };
         let state = JSON.parse(JSON.stringify(DEFAULT_STATE));
         let isModalOpen = false;
@@ -483,16 +481,8 @@
             if ('wakeLock' in navigator) {
                 try {
                     wakeLock = await navigator.wakeLock.request('screen');
-                    wakeLock.addEventListener('release', () => {
-                        console.log('Wake Lock released');
-                    });
-                } catch (err) {
-                    if (err.name === 'NotAllowedError') {
-                        console.warn('Wake Lock request disallowed by browser/system policy.');
-                    } else {
-                        console.warn(`Wake Lock error: ${err.name}, ${err.message}`);
-                    }
-                }
+                    wakeLock.addEventListener('release', () => { console.log('Wake Lock released'); });
+                } catch (err) { /* ignore */ }
             }
         }
         
@@ -502,34 +492,26 @@
                 alert("Supabase SDK 載入失敗，請檢查網路");
                 return;
             }
-
             // @ts-ignore
             supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-            // Bind Keys
             document.getElementById('input-name').addEventListener('keypress', (e) => {
                 if(e.key === 'Enter') addPlayer();
             });
 
-            // 重新取得 WakeLock (當切換 Tab 回來時)
             document.addEventListener('visibilitychange', async () => {
                 if (wakeLock !== null && document.visibilityState === 'visible') {
                     await requestWakeLock();
                 }
             });
 
-            // 立即初始化
             initGlobalRoom();
         });
 
-        // --- 房間與連線邏輯 (簡化版) ---
+        // --- 房間與連線邏輯 ---
         async function initGlobalRoom() {
-            // 1. 取得初始資料
             await refreshData(true); 
-            
-            // 2. 訂閱即時更新
             if(realtimeChannel) await supabase.removeChannel(realtimeChannel);
-            
             realtimeChannel = supabase
                 .channel('room-updates')
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${GLOBAL_ROOM_ID}` },
@@ -543,25 +525,17 @@
                 .subscribe((status) => {
                     const dot1 = document.getElementById('connection-dot-setup');
                     const dot2 = document.getElementById('connection-dot-app');
-                    if(status === 'SUBSCRIBED') {
-                        dot1.classList.add('online');
-                        dot2.classList.add('online');
-                    } else {
-                        dot1.classList.remove('online');
-                        dot2.classList.remove('online');
-                    }
+                    const isOnline = (status === 'SUBSCRIBED');
+                    if(dot1) dot1.classList.toggle('online', isOnline);
+                    if(dot2) dot2.classList.toggle('online', isOnline);
                 });
             
-            // 移除載入遮罩
             document.getElementById('global-loader').style.display = 'none';
-
-            // 啟用 Wake Lock
             requestWakeLock();
         }
 
         async function refreshData(isInitial = false) {
             if(!supabase) return;
-            
             const btnApp = document.querySelector('#app-page .btn-icon');
             if(btnApp) btnApp.classList.add('spinning');
 
@@ -580,11 +554,9 @@
 
             if (data && data.data) {
                 state = data.data;
-                // 確保舊資料也被強制更新為 11 分
                 state.targetScore = 11;
                 syncUI();
             } else if (isInitial) {
-                // 如果是新房間(第一次執行)，建立預設資料
                 await saveData(); 
                 syncUI();
             }
@@ -592,7 +564,6 @@
 
         async function saveData() {
             if(!supabase) return;
-            // 加上時間戳記確保每次 Update 都有變化
             state.timestamp = Date.now();
             const { error } = await supabase
                 .from('rooms')
@@ -603,15 +574,10 @@
         // --- UI 同步與渲染 ---
         function syncUI() {
             renderPlayers();
-            // updateModeUI(); // 已移除
-            
-            // 決定顯示哪個頁面
             if(state.schedule.length > 0) {
-                // 修正 Current Index 邊界
                 if (typeof state.currentIdx !== 'number' || state.currentIdx < 0) state.currentIdx = 0;
                 if (state.currentIdx >= state.schedule.length) state.currentIdx = state.schedule.length - 1;
 
-                // 確保當前場次狀態正確
                 const m = state.schedule[state.currentIdx];
                 if(m && m.status === 'pending') {
                     m.status = 'active';
@@ -620,14 +586,11 @@
                 updateScoreUI();
                 renderSchedule();
                 
-                // 如果在設定頁面但已經有賽程，自動跳轉到計分板
                 const setupPage = document.getElementById('setup-page');
                 const appPage = document.getElementById('app-page');
-                
                 if (setupPage.style.display !== 'none' || (setupPage.style.display === 'none' && appPage.style.display === 'none')) {
                      showAppPage();
                 }
-
             } else {
                 showSetupPage();
             }
@@ -644,21 +607,15 @@
         }
 
         // --- 核心邏輯 ---
-        
         function swapTeams() {
             if(state.schedule.length === 0) return;
             const m = state.schedule[state.currentIdx];
-            
-            // 允許隨時交換，但如果是已結束的場次會提示
             if(m.status === 'finished') {
                 if(!confirm("這場比賽已結束，確定要交換隊伍並修改嗎？")) return;
-                m.status = 'active'; // 恢復比賽
+                m.status = 'active'; 
             }
-
-            // 交換名字與分數
             [m.t1, m.t2] = [m.t2, m.t1];
             [m.s1, m.s2] = [m.s2, m.s1];
-
             saveData();
             syncUI();
         }
@@ -693,100 +650,147 @@
 
         function startSystem() {
             if(state.players.length < 4) { showModal("提示","至少需要 4 位球員才能產生雙打賽程",()=>{}); return; }
-            state.targetScore = 11; // 強制固定 11
-            
+            state.targetScore = 11; 
             if(state.schedule.length === 0) {
-                generateMatches(20); // 預設產生20場
+                generateMatches(20); 
             }
             saveData();
-            // syncUI 會負責切換頁面
         }
 
-        // 產生賽程 (含連續防呆機制)
+        // --- 進階分組演算法 ---
+        // 核心目標：1. 每個人場數平均 2. 避免連續上場超過一次 3. 組合多樣化(避免固定分組)
         function generateMatches(count) {
             let startId = state.schedule.length + 1;
-            // 取得上一場比賽，用來檢查重複組合
-            let lastMatch = state.schedule.length > 0 ? state.schedule[state.schedule.length - 1] : null;
+            
+            // 建立歷史搭檔紀錄 (為了多樣性)
+            let partnerCounts = {}; 
+            // 建立連續上場紀錄 (為了不連續)
+            let consecutiveCounts = {};
+            
+            state.players.forEach(p => {
+                partnerCounts[p.name] = {};
+                state.players.forEach(p2 => partnerCounts[p.name][p2.name] = 0);
+                consecutiveCounts[p.name] = 0;
+            });
+
+            // 回填歷史數據 (從已生成的賽程)
+            state.schedule.forEach(m => {
+                // 更新搭檔次數
+                updatePairCount(partnerCounts, m.t1);
+                updatePairCount(partnerCounts, m.t2);
+                
+                // 更新連續上場次數
+                state.players.forEach(p => {
+                    const playedInMatch = m.t1.includes(p.name) || m.t2.includes(p.name);
+                    if (playedInMatch) consecutiveCounts[p.name]++;
+                    else consecutiveCounts[p.name] = 0; // 只要有一場休息，連續次數歸零
+                });
+            });
 
             for(let i=0; i<count; i++) {
                 let pool = [...state.players];
-                // 排序：上場少 -> 隨機
-                pool.sort((a, b) => (a.played - b.played) || (Math.random() - 0.5));
                 
-                // 取前4人
-                const picked = pool.slice(0, 4);
-                
-                // 更新上場次數
-                picked.forEach(p => {
-                    const realP = state.players.find(x => x.name === p.name);
-                    if(realP) realP.played++;
+                // --- 步驟 1: 選人 (Selection) ---
+                // 計算每個人的優先權重 (分數越小越優先)
+                pool.forEach(p => {
+                    // 1. 上場次數權重 (最高優先級)
+                    let score = p.played * 100000; 
+                    
+                    // 2. 連續上場權重
+                    // - 剛打過1場 (consecutive=1): 加 1500 分 (小處罰)
+                    // - 剛打過2場 (consecutive>=2): 加 50000 分 (大處罰，強制休息)
+                    if (consecutiveCounts[p.name] >= 1) score += 1500;
+                    if (consecutiveCounts[p.name] >= 2) score += 50000; 
+
+                    // 3. 隨機擾動權重
+                    // - 範圍 0~8000 (增加到比 1500 大很多，讓剛下場的人有較高機率繼續打)
+                    // - 這會打破 8 人局的固定分組
+                    score += Math.random() * 8000;
+                    
+                    p.sortScore = score;
                 });
 
-                // --- 產生所有可能組合並檢查重複 ---
-                // 4人有 3 種配對方式: (0,1 vs 2,3), (0,2 vs 1,3), (0,3 vs 1,2)
+                // 排序並取前 4 名
+                pool.sort((a, b) => a.sortScore - b.sortScore);
+                let picked = pool.slice(0, 4);
+
+                // --- 步驟 2: 分組 (Pairing) ---
+                // 4人有 3 種搭檔方式，選擇「歷史搭檔次數總和」最小的那種
                 const combinations = [
                     [[picked[0], picked[1]], [picked[2], picked[3]]],
                     [[picked[0], picked[2]], [picked[1], picked[3]]],
                     [[picked[0], picked[3]], [picked[1], picked[2]]]
                 ];
                 
-                // 隨機打亂組合順序
-                combinations.sort(() => Math.random() - 0.5);
+                // 計算每種組合的「重複成本」
+                let bestCombo = combinations[0];
+                let minCost = Infinity;
 
-                let chosen = combinations[0]; // 預設選第一個
-
-                // 如果有上一場，則嘗試尋找沒有重複搭檔的組合
-                if (lastMatch) {
-                    const isSamePair = (p1, p2) => {
-                        // p1 是本次候選的球員物件陣列, p2 是上一場的名字字串陣列
-                        const n1 = p1.map(x => x.name).sort().join(',');
-                        // 這裡使用複製陣列來排序，避免更動到原始資料
-                        const n2 = [...p2].sort().join(',');
-                        return n1 === n2;
-                    };
-
-                    for (let combo of combinations) {
-                        const teamA = combo[0];
-                        const teamB = combo[1];
-                        
-                        // 檢查 A隊 是否跟上一場的 T1 或 T2 重複
-                        const conflictA = isSamePair(teamA, lastMatch.t1) || isSamePair(teamA, lastMatch.t2);
-                        // 檢查 B隊 是否跟上一場的 T1 或 T2 重複
-                        const conflictB = isSamePair(teamB, lastMatch.t1) || isSamePair(teamB, lastMatch.t2);
-                        
-                        // 兩隊都沒有重複，就是完美的組合
-                        if (!conflictA && !conflictB) {
-                            chosen = combo;
-                            break;
-                        }
+                combinations.forEach(combo => {
+                    const pair1 = combo[0];
+                    const pair2 = combo[1];
+                    // Cost = 兩隊搭檔過的次數加總 + 隨機值 (增加隨機性，避免僵化)
+                    let cost = partnerCounts[pair1[0].name][pair1[1].name] + 
+                               partnerCounts[pair2[0].name][pair2[1].name] +
+                               Math.random() * 1.5;
+                    
+                    if (cost < minCost) {
+                        minCost = cost;
+                        bestCombo = combo;
                     }
-                }
+                });
 
-                const t1 = chosen[0].map(p => p.name);
-                const t2 = chosen[1].map(p => p.name);
+                const t1Names = bestCombo[0].map(p => p.name);
+                const t2Names = bestCombo[1].map(p => p.name);
 
-                const newMatch = {
+                // --- 步驟 3: 更新狀態 (Simulate) ---
+                // 更新總場數
+                picked.forEach(p => {
+                    const realP = state.players.find(x => x.name === p.name);
+                    if(realP) realP.played++;
+                });
+                
+                // 更新連續上場計數 (for next iteration)
+                state.players.forEach(p => {
+                    const isPlaying = picked.some(pick => pick.name === p.name);
+                    if (isPlaying) consecutiveCounts[p.name]++;
+                    else consecutiveCounts[p.name] = 0;
+                });
+
+                // 更新搭檔紀錄
+                updatePairCount(partnerCounts, t1Names);
+                updatePairCount(partnerCounts, t2Names);
+
+                state.schedule.push({
                     id: startId + i,
-                    t1: t1,
-                    t2: t2,
+                    t1: t1Names,
+                    t2: t2Names,
                     s1: 0, s2: 0,
                     status: 'pending' 
-                };
-                
-                state.schedule.push(newMatch);
-                lastMatch = newMatch; // 更新上一場為這一場，供下一輪迴圈檢查
+                });
             }
+        }
+
+        function updatePairCount(matrix, teamArr) {
+            if(teamArr.length < 2) return;
+            const p1 = teamArr[0];
+            const p2 = teamArr[1];
+            if(!matrix[p1]) matrix[p1] = {};
+            if(!matrix[p2]) matrix[p2] = {};
+            if(!matrix[p1][p2]) matrix[p1][p2] = 0;
+            if(!matrix[p2][p1]) matrix[p2][p1] = 0;
+            matrix[p1][p2]++;
+            matrix[p2][p1]++;
         }
 
         function updateScoreUI() {
             if(!state.schedule[state.currentIdx]) return;
             const m = state.schedule[state.currentIdx];
-            const target = 11; // 固定 11 分
+            const target = 11; 
 
             document.getElementById('match-id').innerText = m.id;
             document.getElementById('target-score-display').innerText = target;
             
-            // Text Color Logic (Winner gets Green)
             const s1Elem = document.getElementById('t1-score');
             const s2Elem = document.getElementById('t2-score');
             const fsS1Elem = document.getElementById('fs-t1-score');
@@ -795,23 +799,19 @@
             s1Elem.className = 'score-number' + (m.s1 > m.s2 && m.status==='finished' ? ' winner' : '');
             s2Elem.className = 'score-number' + (m.s2 > m.s1 && m.status==='finished' ? ' winner' : '');
             
-            // Values
             document.getElementById('t1-names').innerHTML = `<span>${m.t1[0]}</span><span>${m.t1[1]}</span>`;
             document.getElementById('t2-names').innerHTML = `<span>${m.t2[0]}</span><span>${m.t2[1]}</span>`;
             s1Elem.innerText = m.s1;
             s2Elem.innerText = m.s2;
 
-            // Fullscreen Sync
             document.getElementById('fs-t1-names').innerHTML = `${m.t1[0]}<br>${m.t1[1]}`;
             document.getElementById('fs-t2-names').innerHTML = `${m.t2[0]}<br>${m.t2[1]}`;
             fsS1Elem.innerText = m.s1;
             fsS2Elem.innerText = m.s2;
             
-            // Fullscreen Highlight (Winner)
             fsS1Elem.className = 'fs-score' + (m.s1 > m.s2 && m.status==='finished' ? ' winner' : '');
             fsS2Elem.className = 'fs-score' + (m.s2 > m.s1 && m.status==='finished' ? ' winner' : '');
 
-            // Main Action Button Logic
             const btn = document.getElementById('main-action-btn');
             if (m.status === 'finished') {
                 btn.innerHTML = "<span>修改分數</span> (已結束)";
@@ -827,75 +827,49 @@
         function updateScore(team, delta) {
             if(isModalOpen) return;
             const m = state.schedule[state.currentIdx];
-            
-            // 若已結束，需先恢復比賽才能改分 (避免誤觸)
             if(m.status === 'finished') {
-                if(confirm("比賽已結束。要恢復比賽並修改分數嗎？")) {
-                    m.status = 'active';
-                } else {
-                    return;
-                }
+                if(confirm("比賽已結束。要恢復比賽並修改分數嗎？")) m.status = 'active';
+                else return;
             }
 
             const oldS1 = m.s1;
             const oldS2 = m.s2;
-
             if(team === 1) m.s1 = Math.max(0, m.s1 + delta);
             else m.s2 = Math.max(0, m.s2 + delta);
 
-            // 如果分數沒變 (例如 0 減 1)，不處理
             if(m.s1 === oldS1 && m.s2 === oldS2) return;
 
-            // --- 簡化後的規則：達到目標分數且兩分差即勝出 ---
             const target = 11;
             const maxS = Math.max(m.s1, m.s2);
             const diff = Math.abs(m.s1 - m.s2);
-            
-            // 只要滿足 "分數到達目標" 並且 "領先2分以上" 就結束
-            const isNormalWin = (maxS >= target && diff >= 2);
-
-            if (isNormalWin) {
-                finishMatch(state.currentIdx);
-            } else {
-                saveData();
-                syncUI(); // 因為沒有 finishMatch，手動 sync
-            }
+            if (maxS >= target && diff >= 2) finishMatch(state.currentIdx);
+            else { saveData(); syncUI(); }
         }
 
         function manualFinishClick() {
             const m = state.schedule[state.currentIdx];
             if(m.status === 'finished') {
-                // 如果已經結束，按鈕功能是找下一場未開始的
                 let nextIdx = state.schedule.findIndex((match, i) => i > state.currentIdx && match.status !== 'finished');
                 if(nextIdx !== -1) {
                     state.currentIdx = nextIdx;
                     state.schedule[nextIdx].status = 'active';
                     saveData();
                 } else {
-                    addMoreMatches(); // 自動加場
+                    addMoreMatches();
                 }
             } else {
-                // 強制結束
-                if(confirm("確定結束本場比賽？")) {
-                    finishMatch(state.currentIdx);
-                }
+                if(confirm("確定結束本場比賽？")) finishMatch(state.currentIdx);
             }
         }
 
         function finishMatch(idx) {
             if(state.schedule[idx]) {
                 state.schedule[idx].status = 'finished';
-                
-                // 找下一場
                 let nextIdx = idx + 1;
-                // 如果下一場不存在，自動產生
-                if(nextIdx >= state.schedule.length) {
-                    // 這裡不自動產生，讓用戶自己按，避免無限產生
-                } else {
+                if(nextIdx >= state.schedule.length) { } 
+                else {
                     state.currentIdx = nextIdx;
-                    if(state.schedule[nextIdx].status === 'pending') {
-                        state.schedule[nextIdx].status = 'active';
-                    }
+                    if(state.schedule[nextIdx].status === 'pending') state.schedule[nextIdx].status = 'active';
                 }
                 saveData();
                 syncUI();
@@ -904,24 +878,15 @@
 
         function resumeMatch() {
             const m = state.schedule[state.currentIdx];
-            if (m) {
-                m.status = 'active';
-                saveData();
-                syncUI();
-            }
+            if (m) { m.status = 'active'; saveData(); syncUI(); }
         }
 
         function goToPreviousMatch() {
-            if (state.currentIdx > 0) {
-                state.currentIdx--;
-                saveData();
-                syncUI();
-            }
+            if (state.currentIdx > 0) { state.currentIdx--; saveData(); syncUI(); }
         }
 
         function addMoreMatches() {
-            generateMatches(20); // 這裡改為產生 20 場
-            // 如果當前是結束狀態，自動跳到新產生的第一場
+            generateMatches(20); 
             const m = state.schedule[state.currentIdx];
             if(m && m.status === 'finished') {
                 const firstNew = state.schedule.findIndex(x => x.status === 'pending');
@@ -933,11 +898,10 @@
 
         function clearData() {
             showModal("重置警告", "確定要清空所有賽程與分數嗎？<br>(名單會保留)", () => {
-                // 保留 players, 重置 schedule
                 state.schedule = [];
                 state.currentIdx = 0;
                 saveData();
-                syncUI(); // 這裡會自動切回 setup page
+                syncUI();
             });
         }
 
@@ -949,12 +913,10 @@
                 const isCur = i === state.currentIdx;
                 const activeClass = isCur ? 'active' : '';
                 const finishedClass = m.status === 'finished' ? 'finished' : '';
-                
                 let scoreDisplay = `<span style="color:#666; font-size:0.8rem;">未開始</span>`;
                 if(m.status === 'active') scoreDisplay = `<span style="color:var(--accent); font-weight:bold;">進行中</span>`;
                 if(m.status === 'finished') scoreDisplay = `${m.s1} : ${m.s2}`;
-
-                // 簡單顯示勝方加粗
+                
                 const t1Style = (m.status==='finished' && m.s1 > m.s2) ? 'color:var(--accent); font-weight:bold;' : '';
                 const t2Style = (m.status==='finished' && m.s2 > m.s1) ? 'color:var(--accent); font-weight:bold;' : '';
 
@@ -970,7 +932,6 @@
                 `;
             }).join('');
             
-            // Scroll to active
             setTimeout(() => {
                 const el = document.querySelector('.match-card.active');
                 if(el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -978,21 +939,18 @@
         }
 
         function jumpToMatch(idx) {
-            // 點擊賽程表切換場次
             if(state.currentIdx === idx) return;
             state.currentIdx = idx;
             saveData();
             syncUI();
         }
 
-        // --- 全螢幕功能 ---
         function openFullscreen() {
             document.getElementById('fs-overlay').classList.add('show');
             const elem = document.documentElement;
             if (elem.requestFullscreen) elem.requestFullscreen().catch(()=>{});
-            else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen(); // Safari
-            
-            requestWakeLock(); // 再次確保恆亮
+            else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
+            requestWakeLock();
         }
 
         function closeFullscreen() {
@@ -1001,18 +959,14 @@
             else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
         }
 
-        // --- Modal ---
         function showModal(title, msg, callback) {
             if(isModalOpen) return;
             isModalOpen = true;
             document.getElementById('modal-title').innerText = title;
             document.getElementById('modal-msg').innerHTML = msg;
             const btn = document.getElementById('modal-confirm-btn');
-            
-            // 重置按鈕事件 (cloneNode trick)
             const newBtn = btn.cloneNode(true);
             btn.parentNode.replaceChild(newBtn, btn);
-            
             newBtn.onclick = () => { closeModal(); callback(); };
             document.getElementById('custom-modal').classList.add('show');
         }
