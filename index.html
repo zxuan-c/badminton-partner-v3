@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#2c3e50">
-    <title>羽球夥伴</title>
+    <title>羽球排程 v5 (Global)</title>
     
     <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/zxuan-c/badminton-partner-v4/refs/heads/main/icon.jpg">
 
@@ -251,10 +251,27 @@
 
         .vs-column {
             display: flex; flex-direction: column; align-items: center; justify-content: center;
-            margin: 0 5px; opacity: 0.5;
+            margin: 0 10px; opacity: 0.7; /* 增加不透明度 */
         }
-        .vs-text { font-size: 1.2rem; font-weight: 900; font-style: italic; color: #ccc; margin-bottom: 10px;}
-        .btn-swap { font-size: 1.5rem; color: #999; padding: 10px; background: #f8f9fa; border-radius: 50%; }
+        .vs-text { 
+            font-size: 2.5rem; /* 放大 */
+            font-weight: 900; 
+            font-style: italic; 
+            color: #ccc; 
+            margin-bottom: 5px;
+        }
+        .btn-swap { 
+            font-size: 2.2rem; /* 放大 */
+            color: #999; 
+            padding: 12px; 
+            background: #f8f9fa; 
+            border-radius: 50%; 
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            transition: transform 0.1s;
+        }
+        .btn-swap:active { transform: scale(0.95); background: #eee; }
 
         .next-match-area {
             margin-top: auto; padding-top: 10px; display: flex; gap: 10px;
@@ -303,6 +320,35 @@
         .toolbar { display: flex; gap: 10px; }
         .toolbar button { background: #333; color: #ccc; border: 1px solid #444; border-radius: 8px; padding: 6px 12px; font-size: 0.8rem; }
         
+        /* 統一的操作按鈕樣式 */
+        .btn-action {
+            border-radius: 12px;
+            padding: 8px 14px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            display: flex; align-items: center; gap: 6px;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+            transition: all 0.1s;
+            cursor: pointer;
+            border: none;
+            white-space: nowrap;
+        }
+        .btn-action:active { transform: scale(0.96); opacity: 0.9; }
+
+        /* 重新整理按鈕 (次要風格：白底灰字) */
+        .btn-refresh {
+            background: #ffffff; 
+            color: #555;
+            border: 1px solid #ddd;
+        }
+
+        /* 全螢幕按鈕 (主要風格：深藍底白字) */
+        .btn-fullscreen {
+            background: var(--primary);
+            color: white;
+            border: 1px solid var(--primary);
+        }
+
         .spinning { animation: spin 1s linear infinite; }
         @keyframes spin { 100% { transform: rotate(360deg); } }
         
@@ -369,7 +415,8 @@
                 <h2 style="color: var(--primary); margin:0;">羽球排程 (Global)</h2>
                 <div style="display:flex; align-items:center; gap:8px;">
                     <span class="status-dot" id="connection-dot-setup" style="margin-right:0;"></span>
-                    <button class="btn-icon" onclick="refreshData()" style="color:#888; background:transparent;">🔄</button>
+                    <!-- 統一設計的重新整理按鈕 -->
+                    <button class="btn-action btn-refresh" onclick="refreshData()">🔄 重新整理</button>
                 </div>
             </div>
             
@@ -402,10 +449,9 @@
                     <span class="match-badge" style="margin-left:5px; background:#fff; border:1px solid #eee;" id="target-score-display">11</span>
                 </div>
                 <div style="display:flex; gap:10px; align-items:center;">
-                    <button class="btn-icon" onclick="refreshData()" style="color:#888; background:transparent; font-size:1.2rem;">🔄</button>
-                    <button style="background:var(--primary); color:white; padding:5px 12px; border-radius:15px; font-size:0.8rem; display:flex; align-items:center; gap:5px;" onclick="openFullscreen()">
-                        ⛶ 全螢幕
-                    </button>
+                    <!-- 統一設計的按鈕 -->
+                    <button class="btn-action btn-refresh" onclick="refreshData()">🔄 重新整理</button>
+                    <button class="btn-action btn-fullscreen" onclick="openFullscreen()">⛶ 全螢幕</button>
                 </div>
             </div>
 
@@ -536,8 +582,9 @@
 
         async function refreshData(isInitial = false) {
             if(!supabase) return;
-            const btnApp = document.querySelector('#app-page .btn-icon');
-            if(btnApp) btnApp.classList.add('spinning');
+            // 選擇按鈕 (選取所有重新整理按鈕加上動畫)
+            const btns = document.querySelectorAll('.btn-refresh');
+            btns.forEach(b => b.classList.add('spinning'));
 
             const { data, error } = await supabase
                 .from('rooms')
@@ -545,7 +592,7 @@
                 .eq('id', GLOBAL_ROOM_ID)
                 .single();
 
-            if(btnApp) setTimeout(()=>btnApp.classList.remove('spinning'), 500);
+            setTimeout(()=> btns.forEach(b => b.classList.remove('spinning')), 500);
 
             if (error && error.code !== 'PGRST116') { 
                 if(!isInitial) console.error("Sync Error", error);
