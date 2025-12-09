@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#2c3e50">
-    <title>羽球排程 v5 (Global)</title>
+    <title>羽球排程</title>
     
     <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/zxuan-c/badminton-partner-v4/refs/heads/main/icon.jpg">
 
@@ -582,17 +582,12 @@
 
         async function refreshData(isInitial = false) {
             if(!supabase) return;
-            // 選擇按鈕 (選取所有重新整理按鈕加上動畫)
-            const btns = document.querySelectorAll('.btn-refresh');
-            btns.forEach(b => b.classList.add('spinning'));
-
+            
             const { data, error } = await supabase
                 .from('rooms')
                 .select('data')
                 .eq('id', GLOBAL_ROOM_ID)
                 .single();
-
-            setTimeout(()=> btns.forEach(b => b.classList.remove('spinning')), 500);
 
             if (error && error.code !== 'PGRST116') { 
                 if(!isInitial) console.error("Sync Error", error);
