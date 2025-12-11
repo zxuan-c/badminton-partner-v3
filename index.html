@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#2c3e50">
-    <title>羽球排程</title>
+    <title>羽球排程 v5 (Global)</title>
     
     <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/zxuan-c/badminton-partner-v4/refs/heads/main/icon.jpg">
 
@@ -50,7 +50,7 @@
         }
         button:active { transform: scale(0.96); opacity: 0.9; }
 
-        /* --- 全螢幕計分模式 --- */
+        /* --- 全螢幕計分模式 (改名為計分版) --- */
         #fs-overlay {
             display: none;
             position: fixed; top: 0; left: 0; width: 100%; height: 100svh;
@@ -91,11 +91,15 @@
         }
 
         .fs-names {
-            font-size: clamp(1.5rem, 6vmin, 3rem); color: #bbb;
+            font-size: clamp(1.2rem, 5vmin, 2.5rem); 
             text-align: center; margin-bottom: 1vh; font-weight: 700;
             line-height: 1.2; padding: 0 10px; word-break: break-word;
             text-shadow: 0 2px 4px rgba(0,0,0,0.5);
         }
+        
+        /* 計分版模式：不同隊伍顏色 */
+        #fs-t1-names { color: #4fc3f7; } /* 亮藍色 */
+        #fs-t2-names { color: #ffd54f; } /* 亮黃色 */
 
         .fs-score {
             font-size: 40vmin; font-weight: 800; color: white;
@@ -222,7 +226,8 @@
         .team-names {
             font-size: 1.4rem; font-weight: 800; text-align: center;
             color: #2c3e50; margin-bottom: 10px; min-height: 3.2rem;
-            display: flex; flex-direction: column; justify-content: flex-end;
+            /* 改成 Flex Row 且置中，讓名字左右排列 */
+            display: flex; flex-direction: row; justify-content: center; align-items: center; gap: 8px; flex-wrap: wrap;
             line-height: 1.1;
         }
 
@@ -342,7 +347,7 @@
             border: 1px solid #ddd;
         }
 
-        /* 全螢幕按鈕 (主要風格：深藍底白字) */
+        /* 全螢幕/計分版按鈕 (主要風格：深藍底白字) */
         .btn-fullscreen {
             background: var(--primary);
             color: white;
@@ -369,7 +374,7 @@
         <div style="color:#666; font-weight:bold;">正在連線到羽球排程...</div>
     </div>
 
-    <!-- 全螢幕計分模式 -->
+    <!-- 全螢幕計分模式 (計分版) -->
     <div id="fs-overlay">
         <button class="fs-close-btn" onclick="closeFullscreen()">✕</button>
         <div class="fs-container">
@@ -451,7 +456,8 @@
                 <div style="display:flex; gap:10px; align-items:center;">
                     <!-- 統一設計的按鈕 -->
                     <button class="btn-action btn-refresh" onclick="refreshData()">🔄 重新整理</button>
-                    <button class="btn-action btn-fullscreen" onclick="openFullscreen()">⛶ 全螢幕</button>
+                    <!-- 改名為計分版 -->
+                    <button class="btn-action btn-fullscreen" onclick="openFullscreen()">⛶ 計分版</button>
                 </div>
             </div>
 
@@ -582,12 +588,17 @@
 
         async function refreshData(isInitial = false) {
             if(!supabase) return;
-            
+            // 選擇按鈕 (選取所有重新整理按鈕加上動畫)
+            const btns = document.querySelectorAll('.btn-refresh');
+            // btns.forEach(b => b.classList.add('spinning')); // 已移除旋轉動畫
+
             const { data, error } = await supabase
                 .from('rooms')
                 .select('data')
                 .eq('id', GLOBAL_ROOM_ID)
                 .single();
+
+            // setTimeout(()=> btns.forEach(b => b.classList.remove('spinning')), 500); // 已移除旋轉動畫
 
             if (error && error.code !== 'PGRST116') { 
                 if(!isInitial) console.error("Sync Error", error);
@@ -841,13 +852,15 @@
             s1Elem.className = 'score-number' + (m.s1 > m.s2 && m.status==='finished' ? ' winner' : '');
             s2Elem.className = 'score-number' + (m.s2 > m.s1 && m.status==='finished' ? ' winner' : '');
             
-            document.getElementById('t1-names').innerHTML = `<span>${m.t1[0]}</span><span>${m.t1[1]}</span>`;
-            document.getElementById('t2-names').innerHTML = `<span>${m.t2[0]}</span><span>${m.t2[1]}</span>`;
+            // 左右排列：Player1 / Player2
+            document.getElementById('t1-names').innerHTML = `${m.t1[0]} <span style="color:#bbb; font-weight:normal; margin:0 5px;">/</span> ${m.t1[1]}`;
+            document.getElementById('t2-names').innerHTML = `${m.t2[0]} <span style="color:#bbb; font-weight:normal; margin:0 5px;">/</span> ${m.t2[1]}`;
             s1Elem.innerText = m.s1;
             s2Elem.innerText = m.s2;
 
-            document.getElementById('fs-t1-names').innerHTML = `${m.t1[0]}<br>${m.t1[1]}`;
-            document.getElementById('fs-t2-names').innerHTML = `${m.t2[0]}<br>${m.t2[1]}`;
+            // 計分版 (全螢幕) 模式也改為左右排列
+            document.getElementById('fs-t1-names').innerHTML = `${m.t1[0]} <span style="opacity:0.5; font-weight:normal; margin:0 5px;">/</span> ${m.t1[1]}`;
+            document.getElementById('fs-t2-names').innerHTML = `${m.t2[0]} <span style="opacity:0.5; font-weight:normal; margin:0 5px;">/</span> ${m.t2[1]}`;
             fsS1Elem.innerText = m.s1;
             fsS2Elem.innerText = m.s2;
             
