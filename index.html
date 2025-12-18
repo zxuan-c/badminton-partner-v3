@@ -50,7 +50,7 @@
         }
         button:active { transform: scale(0.96); opacity: 0.9; }
 
-        /* --- 全螢幕計分模式 (改名為計分版) --- */
+        /* --- 全螢幕計分模式 (計分版) --- */
         #fs-overlay {
             display: none;
             position: fixed; top: 0; left: 0; width: 100%; height: 100svh;
@@ -513,7 +513,7 @@
         const SUPABASE_KEY = 'sb_publishable_-tIVFIoo0VXjtrWrKadCgw__QO8IAbW';
 
         // --- 變數 ---
-        let supabase;
+        let supabaseClient;
         let realtimeChannel = null;
         let wakeLock = null;
 
@@ -545,7 +545,7 @@
                 return;
             }
             // @ts-ignore
-            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
             document.getElementById('input-name').addEventListener('keypress', (e) => {
                 if(e.key === 'Enter') addPlayer();
@@ -563,8 +563,8 @@
         // --- 房間與連線邏輯 ---
         async function initGlobalRoom() {
             await refreshData(true); 
-            if(realtimeChannel) await supabase.removeChannel(realtimeChannel);
-            realtimeChannel = supabase
+            if(realtimeChannel) await supabaseClient.removeChannel(realtimeChannel);
+            realtimeChannel = supabaseClient
                 .channel('room-updates')
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${GLOBAL_ROOM_ID}` },
                     (payload) => {
@@ -587,12 +587,12 @@
         }
 
         async function refreshData(isInitial = false) {
-            if(!supabase) return;
+            if(!supabaseClient) return;
             // 選擇按鈕 (選取所有重新整理按鈕加上動畫)
             const btns = document.querySelectorAll('.btn-refresh');
             // btns.forEach(b => b.classList.add('spinning')); // 已移除旋轉動畫
 
-            const { data, error } = await supabase
+            const { data, error } = await supabaseClient
                 .from('rooms')
                 .select('data')
                 .eq('id', GLOBAL_ROOM_ID)
@@ -616,9 +616,9 @@
         }
 
         async function saveData() {
-            if(!supabase) return;
+            if(!supabaseClient) return;
             state.timestamp = Date.now();
-            const { error } = await supabase
+            const { error } = await supabaseClient
                 .from('rooms')
                 .upsert({ id: GLOBAL_ROOM_ID, data: state });
             if(error) console.error("Save error:", error);
